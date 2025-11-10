@@ -627,7 +627,7 @@ export function BooksManagement() {
                   onClick={() => handleViewChapters(book)}
                   className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
                 >
-                  <BookOpen className="h-3 w-3 mr-1" />
+                  <BookOpen className="h-3 w-3" />
                   Chapters
                 </Button>
                 <Button
@@ -636,8 +636,8 @@ export function BooksManagement() {
                   onClick={() => handleDeleteBook(book)}
                   className="rounded-lg"
                 >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Delete
+                  <Trash2 className="h-3 w-3" />
+                  
                 </Button>
               </div>
             </div>
