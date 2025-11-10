@@ -13,6 +13,7 @@ import { Separator } from "./ui/separator";
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Volume2, Plus, Edit, Play, Pause, ArrowLeft, Save, Upload, FileText, Clock, Trash2, Music, Bot } from 'lucide-react';
 import { audioService, uploadService } from '../services';
+import { toast } from 'sonner@2.0.3';
 
 // Mock audio data
 const mockBhajanAudio = [
@@ -125,6 +126,28 @@ export function AudioManagement() {
     return Music;
   };
 
+  const handleDeleteAudio = async (audio: any) => {
+    if (!audio?.id) return;
+    const confirmDelete = window.confirm(`Delete audio "${audio.title}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await audioService.deleteAudio(audio.id);
+      if (res.success) {
+        toast.success('Audio deleted successfully');
+        setAudioList((prev) => prev.filter(item => item.id !== audio.id));
+        if (selectedAudio?.id === audio.id) {
+          setSelectedAudio(null);
+          setViewMode('list');
+        }
+      } else {
+        toast.error(res.error || 'Failed to delete audio');
+      }
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to delete audio');
+    }
+  };
+
   const handleEditAudio = (audio: any) => {
     setSelectedAudio(audio);
     setViewMode('edit');
@@ -136,7 +159,7 @@ export function AudioManagement() {
   };
 
   // Audio Editor Component
-  function AudioEditor({ audio, onSave }: { audio: any; onSave: (audio: any) => void }) {
+  function AudioEditor({ audio, onSave, onDelete }: { audio: any; onSave: (audio: any) => void; onDelete: (audioId: string) => void }) {
     const [title, setTitle] = useState(audio.title);
     const [description, setDescription] = useState(audio.description);
     const [text, setText] = useState(audio.text);
@@ -214,13 +237,23 @@ export function AudioManagement() {
               <p className="text-gray-600 text-lg">Manage audio file and associated text</p>
             </div>
           </div>
-          <Button
-            onClick={handleSave}
-            className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl"
-          >
-            <Save className="h-5 w-5" />
-            Save Changes
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onDelete(audio.id)}
+              variant="destructive"
+              className="gap-2 rounded-xl px-4"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+            <Button
+              onClick={handleSave}
+              className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl"
+            >
+              <Save className="h-5 w-5" />
+              Save Changes
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -358,6 +391,12 @@ export function AudioManagement() {
         audio={selectedAudio}
         onSave={(updatedAudio) => {
           setAudioList(audioList.map(audio => audio.id === updatedAudio.id ? updatedAudio : audio));
+        }}
+        onDelete={async (audioId) => {
+          const target = audioList.find(item => item.id === audioId);
+          if (target) {
+            await handleDeleteAudio(target);
+          }
         }}
       />
     );
@@ -610,6 +649,15 @@ export function AudioManagement() {
             >
               <Play className="h-3 w-3 mr-1" />
               Preview
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => handleDeleteAudio(audio)}
+              className="flex-1 rounded-lg"
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Delete
             </Button>
           </div>
         </CardContent>

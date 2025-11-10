@@ -70,6 +70,26 @@ export function BooksManagement() {
     return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">{category}</Badge>;
   };
 
+  const handleDeleteBook = async (book: any) => {
+    if (!book?.id) return;
+    const confirmDelete = window.confirm(`Delete "${book.title}" and all of its chapters?`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await bookService.deleteBook(book.id);
+      if (res.success) {
+        toast.success('Book deleted successfully');
+        if (selectedBook?.id === book.id) {
+          handleBackToBooks();
+        }
+      } else {
+        toast.error(res.error || 'Failed to delete book');
+      }
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to delete book');
+    }
+  };
+
   const handleViewChapters = (book: any) => {
     setSelectedBook(book);
     setViewMode('chapters');
@@ -277,6 +297,24 @@ export function BooksManagement() {
                 onSave={(updatedChapter) => {
                   setChapters(chapters.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
                   setSelectedChapter(updatedChapter);
+                }}
+                onDelete={async (chapterId) => {
+                  if (!chapterId) return;
+                  const confirmDelete = window.confirm('Delete this chapter?');
+                  if (!confirmDelete) return;
+                  try {
+                    const res = await bookService.deleteChapter(chapterId);
+                    if (res.success) {
+                      toast.success('Chapter deleted successfully');
+                      const updated = chapters.filter(ch => ch.id !== chapterId);
+                      setChapters(updated);
+                      setSelectedChapter(null);
+                    } else {
+                      toast.error(res.error || 'Failed to delete chapter');
+                    }
+                  } catch (error) {
+                    toast.error((error as Error).message || 'Failed to delete chapter');
+                  }
                 }}
               />
             ) : (
@@ -592,6 +630,15 @@ export function BooksManagement() {
                   <BookOpen className="h-3 w-3 mr-1" />
                   Chapters
                 </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDeleteBook(book)}
+                  className="rounded-lg"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Delete
+                </Button>
               </div>
             </div>
           </div>
@@ -603,7 +650,7 @@ export function BooksManagement() {
     );
   }
 
-  function ChapterEditor({ chapter, onSave }: { chapter: any; onSave: (chapter: any) => void }) {
+  function ChapterEditor({ chapter, onSave, onDelete }: { chapter: any; onSave: (chapter: any) => void; onDelete: (chapterId: string) => void }) {
     const [title, setTitle] = useState(chapter.title);
     const [content, setContent] = useState(chapter.content);
     const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -648,6 +695,15 @@ export function BooksManagement() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-bold text-gray-900">Edit Chapter</CardTitle>
             <div className="flex gap-2">
+              <Button
+                onClick={() => onDelete(chapter.id)}
+                variant="destructive"
+                size="sm"
+                className="gap-2 rounded-xl"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
               <Button
                 onClick={() => audioInputRef.current?.click()}
                 variant="outline"
