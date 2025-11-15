@@ -132,7 +132,7 @@ export default function App() {
               <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
             </div>
             <div>
-              <h2 className="font-bold text-xl text-gray-900">CMS Admin</h2>
+              <h2 className="font-bold text-xl text-gray-900">Sivanada Admin</h2>
               <p className="text-xs text-orange-600 font-medium">Content Management</p>
             </div>
           </div>
