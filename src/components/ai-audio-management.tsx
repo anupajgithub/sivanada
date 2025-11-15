@@ -538,7 +538,7 @@ export function AIAudioManagement() {
                   className="rounded-lg"
                 >
                   <Trash2 className="h-3 w-3 mr-1" />
-                  Delete
+                 
                 </Button>
               </div>
             </div>
