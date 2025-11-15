@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -11,7 +11,7 @@ import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Upload, Bold, Italic, Image, Type, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock } from 'lucide-react';
 import { bookService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -445,11 +445,13 @@ export function BooksManagement() {
                 </Button>
                 <Button
                   onClick={async () => {
-                    if (!newTitle.trim() || !newAuthor.trim()) return;
-                    const now = new Date().toISOString();
+                    if (!newTitle.trim()) {
+                      toast.error('Please enter a category title');
+                      return;
+                    }
                     const res = await bookService.createBook({
                       title: newTitle.trim(),
-                      author: newAuthor.trim(),
+                      author: 'Category', // Default author since field is hidden
                       description: '',
                       category: (['spiritual','educational','philosophy','meditation'] as any).includes(newCategory.toLowerCase()) ? newCategory.toLowerCase() : 'spiritual',
                       language: newLanguage as any,
@@ -467,9 +469,9 @@ export function BooksManagement() {
                       }
                       setIsAddBookOpen(false);
                       setNewTitle(""); setNewAuthor(""); setNewLanguage('hindi'); setNewCategory(""); setNewCoverFile(null);
+                      toast.success('Category created successfully');
                     } else {
-                      // eslint-disable-next-line no-alert
-                      alert(res.error || 'Failed to create book');
+                      toast.error(res.error || 'Failed to create category');
                     }
                   }}
                   className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
