@@ -35,10 +35,10 @@ export function AIAudioManagement() {
   const [editingCategory, setEditingCategory] = useState<any>(null);
 
   useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const result = await aiAudioService.getAllCategoriesWithContent();
-        if (result.success && result.data) {
+  const loadCategories = async () => {
+    try {
+      const result = await aiAudioService.getAllCategoriesWithContent();
+      if (result.success && result.data) {
           const normalized = result.data.map((cat: any) => ({
             id: cat.id,
             name: cat.name,
@@ -51,12 +51,12 @@ export function AIAudioManagement() {
             )
           }));
           setCategories(normalized);
-        }
-      } catch (error) {
-        console.error('Error loading categories:', error);
-        setCategories([]);
       }
-    };
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setCategories([]);
+    }
+  };
     loadCategories();
   }, []);
 
@@ -193,10 +193,10 @@ export function AIAudioManagement() {
           {/* Chapter Editor */}
           <div className="lg:col-span-2">
             {selectedChapter ? (
-              <ChapterEditor
-                chapter={selectedChapter}
-                category={selectedCategory}
-                onSave={(updatedChapter) => {
+      <ChapterEditor
+        chapter={selectedChapter}
+        category={selectedCategory}
+        onSave={(updatedChapter) => {
                   setChapters(chapters.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
                   setSelectedChapter(updatedChapter);
                 }}
@@ -352,7 +352,7 @@ export function AIAudioManagement() {
                           await aiAudioService.updateCategory(res.data.id, { imageUrl: uploadResult.url } as any);
                         }
                       }
-                      setIsAddCategoryOpen(false);
+                    setIsAddCategoryOpen(false);
                       setNewName(""); setNewDescription(""); setNewImageFile(null);
                       toast.success('Category created successfully');
                       // Reload categories
@@ -371,7 +371,7 @@ export function AIAudioManagement() {
                         }));
                         setCategories(normalized);
                       }
-                    } else {
+                  } else {
                       toast.error(res.error || 'Failed to create category');
                     }
                   }}
@@ -447,24 +447,24 @@ export function AIAudioManagement() {
             <div>
               <CardTitle className="text-2xl font-bold text-gray-900">AI Audio Categories</CardTitle>
               <p className="text-gray-600 mt-1">Browse and manage AI audio categories</p>
-            </div>
           </div>
+        </div>
         </CardHeader>
 
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {categories.map((category) => (
+          {categories.map((category) => (
               <CategoryCard key={category.id} category={category} />
-            ))}
-          </div>
+          ))}
+        </div>
         </CardContent>
       </Card>
     </div>
   );
 
   function CategoryCard({ category }: { category: any }) {
-    return (
-      <Card className="group relative overflow-hidden border-0 bg-white/60 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] rounded-2xl">
+  return (
+    <Card className="group relative overflow-hidden border-0 bg-white/60 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] rounded-2xl">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-50/50 to-orange-100/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         
         <CardContent className="relative p-6">
@@ -472,84 +472,84 @@ export function AIAudioManagement() {
             {/* Category Image/Icon */}
             <div className="relative">
               {category.imageUrl ? (
-                <ImageWithFallback
-                  src={category.imageUrl}
-                  alt={category.name}
+            <ImageWithFallback
+              src={category.imageUrl}
+              alt={category.name}
                   className="w-20 h-28 object-cover rounded-xl shadow-md group-hover:shadow-lg transition-shadow duration-300"
                 />
               ) : (
                 <div className="w-20 h-28 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
                   <Bot className="h-10 w-10 text-white" />
-                </div>
-              )}
+          </div>
+        )}
             </div>
             
             {/* Category Details */}
             <div className="flex-1 space-y-3">
               <div>
                 <h3 className="font-bold text-gray-900 line-clamp-2 group-hover:text-orange-600 transition-colors duration-300">
-                  {category.name}
-                </h3>
+                {category.name}
+              </h3>
                 <p className="text-sm text-gray-600 line-clamp-2 mt-1">{category.description}</p>
-              </div>
+            </div>
               
               <div className="flex items-center gap-2 flex-wrap">
                 {getStatusBadge(category.status)}
-              </div>
-              
-              {/* Stats */}
+          </div>
+
+          {/* Stats */}
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <FileText className="h-4 w-4 text-orange-500" />
                   <span>{category.chapters} chapters</span>
-                </div>
+            </div>
                 <div className="flex items-center gap-1">
                   <Volume2 className="h-4 w-4 text-orange-500" />
                   <span>{category.audioItemsCount} audio items</span>
-                </div>
-              </div>
-              
-              {/* Actions */}
+            </div>
+          </div>
+          
+          {/* Actions */}
               <div className="flex gap-2 pt-2">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
+            <Button 
+              size="sm" 
+              variant="outline" 
                   onClick={() => {
                     setEditingCategory(category);
                     setIsEditCategoryOpen(true);
                   }}
                   className="rounded-lg border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300"
-                >
-                  <Edit className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-                <Button 
-                  size="sm" 
+            >
+              <Edit className="h-3 w-3 mr-1" />
+              Edit
+            </Button>
+            <Button 
+              size="sm" 
                   onClick={() => handleViewChapters(category)}
                   className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
-                >
+            >
                   <Bot className="h-3 w-3 mr-1" />
                   Chapters
-                </Button>
-                <Button
-                  size="sm"
+            </Button>
+            <Button
+              size="sm"
                   variant="destructive"
                   onClick={() => handleDeleteCategory(category)}
                   className="rounded-lg"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
                  
-                </Button>
+            </Button>
               </div>
-            </div>
           </div>
-        </CardContent>
-        
+        </div>
+      </CardContent>
+      
         {/* Hover effect bar */}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-orange-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
-      </Card>
-    );
-  }
+    </Card>
+  );
+}
 
   function ChapterEditor({ chapter, category, onSave, onDelete }: { chapter: any; category: any; onSave: (chapter: any) => void; onDelete: (chapterId: string) => void }) {
     const [title, setTitle] = useState(chapter.title);
@@ -563,7 +563,7 @@ export function AIAudioManagement() {
       const loadAudioItem = async () => {
         try {
           const result = await aiAudioService.getAllCategoriesWithContent();
-          if (result.success && result.data) {
+                  if (result.success && result.data) {
             const foundCategory = result.data.find((c: any) => c.id === category.id);
             if (foundCategory) {
               const foundChapter = foundCategory.chapters?.find((ch: any) => ch.id === chapter.id);
@@ -573,8 +573,8 @@ export function AIAudioManagement() {
                 setAudioUrl(item.audioUrl || '');
               }
             }
-          }
-        } catch (error) {
+                  }
+                } catch (error) {
           console.error('Error loading audio item:', error);
         }
       };
@@ -603,7 +603,7 @@ export function AIAudioManagement() {
               const uploadResult = await uploadService.uploadAudio(audioFile, `ai-audio/${audioItemId || chapter.id}`);
               if (uploadResult.success && uploadResult.url) {
                 finalAudioUrl = uploadResult.url;
-              } else {
+                      } else {
                 toast.error('Failed to upload audio file');
                 return;
               }
@@ -626,8 +626,8 @@ export function AIAudioManagement() {
             } else {
               // Create new audio item
               const createResult = await aiAudioService.createAudioItem({
-                chapterId: chapter.id,
-                categoryId: category.id,
+                    chapterId: chapter.id,
+                    categoryId: category.id,
                 title: 'Audio Item',
                 text,
                 status: 'Draft',
@@ -645,13 +645,13 @@ export function AIAudioManagement() {
                 }
                 onSave({ ...chapter, title });
                 toast.success('Chapter saved successfully');
-              } else {
+                  } else {
                 toast.error('Failed to create audio item: ' + createResult.error);
               }
             }
           }
-        }
-      } catch (error) {
+                  }
+                } catch (error) {
         toast.error('Error saving chapter: ' + (error as Error).message);
       }
     };
@@ -668,35 +668,35 @@ export function AIAudioManagement() {
         <CardHeader className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40 p-6">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-bold text-gray-900">Edit Chapter</CardTitle>
-            <div className="flex gap-2">
-              <Button
+              <div className="flex gap-2">
+                <Button
                 onClick={() => onDelete(chapter.id)}
                 variant="destructive"
-                size="sm"
+                  size="sm"
                 className="gap-2 rounded-xl"
-              >
+                >
                 <Trash2 className="h-4 w-4" />
                 Delete
-              </Button>
-              <Button
+                </Button>
+                <Button
                 onClick={() => audioInputRef.current?.click()}
                 variant="outline"
-                size="sm"
+                  size="sm"
                 className="gap-2 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
               >
                 <Upload className="h-4 w-4" />
                 Add Audio
-              </Button>
-              <Button
+                </Button>
+                <Button
                 onClick={handleSave}
-                size="sm"
+                  size="sm"
                 className="gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
               >
                 <Save className="h-4 w-4" />
                 Save
-              </Button>
-            </div>
-          </div>
+                </Button>
+              </div>
+      </div>
         </CardHeader>
         
         <CardContent className="p-6 space-y-6">
@@ -710,7 +710,7 @@ export function AIAudioManagement() {
               className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
               placeholder="Enter chapter title"
             />
-          </div>
+      </div>
 
           {/* Text Content */}
           <div className="space-y-2">
@@ -724,7 +724,7 @@ export function AIAudioManagement() {
             />
             <div className="text-right">
               <span className="text-sm text-gray-500">{text.length} characters</span>
-            </div>
+              </div>
           </div>
 
           {/* Audio Upload */}
@@ -741,13 +741,13 @@ export function AIAudioManagement() {
                 {audioFile || audioUrl ? 'Change Audio' : 'Add Audio'}
               </Button>
             </div>
-            <input
+              <input
               ref={audioInputRef}
-              type="file"
+                type="file"
               accept="audio/*"
               onChange={handleAudioUpload}
-              className="hidden"
-            />
+                className="hidden"
+              />
             
             {(audioFile || audioUrl) && (
               <AudioPlayer 
@@ -767,14 +767,14 @@ export function AIAudioManagement() {
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
-    const handleSave = async () => {
+  const handleSave = async () => {
       try {
         let audioUrl = audioItem.audioUrl;
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `ai-audio/${audioItem.id}`);
           if (uploadResult.success && uploadResult.url) {
             audioUrl = uploadResult.url;
-          } else {
+    } else {
             toast.error('Failed to upload audio file');
             return;
           }
@@ -790,30 +790,30 @@ export function AIAudioManagement() {
         if (result.success) {
           const updatedItem = {
             ...audioItem,
-            text,
+      text,
             audioFile: audioFile ? audioFile.name : audioItem.audioFile,
             audioUrl: audioUrl
           };
           onSave(updatedItem);
           toast.success('Audio item saved successfully');
-        } else {
+    } else {
           toast.error('Failed to save audio item: ' + result.error);
         }
       } catch (error) {
         toast.error('Error saving audio item: ' + (error as Error).message);
-      }
-    };
+    }
+  };
 
     const handleAudioUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        setAudioFile(file);
-      }
-    };
+    const file = event.target.files?.[0];
+    if (file) {
+      setAudioFile(file);
+    }
+  };
 
-    return (
+  return (
       <div className="space-y-4 p-4 border border-orange-200 rounded-xl bg-orange-50/30">
-        <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
           <h4 className="font-semibold text-gray-900">Edit Audio Item</h4>
           <Button
             onClick={onClose}
@@ -822,11 +822,11 @@ export function AIAudioManagement() {
             className="h-6 w-6 p-0"
           >
             ×
-          </Button>
-        </div>
+        </Button>
+      </div>
 
         <div className="space-y-4">
-          <div className="space-y-2">
+            <div className="space-y-2">
             <Label htmlFor="audio-item-text" className="text-sm font-semibold text-gray-700">Text Content</Label>
             <Textarea
               id="audio-item-text"
@@ -838,21 +838,21 @@ export function AIAudioManagement() {
             <div className="text-right">
               <span className="text-sm text-gray-500">{text.length} characters</span>
             </div>
-          </div>
-
+            </div>
+            
           <div className="space-y-2">
             <Label className="text-sm font-semibold text-gray-700">Audio File</Label>
-            <div className="flex gap-2">
-              <Button
+                <div className="flex gap-2">
+                  <Button 
                 onClick={() => audioInputRef.current?.click()}
-                variant="outline"
-                size="sm"
+                    variant="outline" 
+                    size="sm" 
                 className="gap-2 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
-              >
-                <Upload className="h-4 w-4" />
+                  >
+                    <Upload className="h-4 w-4" />
                 {audioFile || audioItem.audioFile ? 'Change Audio' : 'Add Audio'}
-              </Button>
-            </div>
+                  </Button>
+                </div>
             <input
               ref={audioInputRef}
               type="file"
@@ -860,21 +860,21 @@ export function AIAudioManagement() {
               onChange={handleAudioUpload}
               className="hidden"
             />
-            
-            {(audioFile || audioItem.audioFile || audioItem.audioUrl) && (
+              
+              {(audioFile || audioItem.audioFile || audioItem.audioUrl) && (
               <AudioPlayer 
                 audioUrl={audioItem.audioUrl || (audioFile ? URL.createObjectURL(audioFile) : '')}
                 fileName={audioFile ? audioFile.name : audioItem.audioFile || 'Audio File'}
                 duration={audioItem.duration}
               />
-            )}
-          </div>
+                        )}
+                      </div>
 
           <div className="flex justify-end gap-2">
-            <Button
+                      <Button
               onClick={onClose}
               variant="outline"
-              size="sm"
+                        size="sm"
               className="rounded-xl border-orange-200 text-gray-700 hover:bg-orange-50"
             >
               Cancel
@@ -886,10 +886,10 @@ export function AIAudioManagement() {
             >
               <Save className="h-4 w-4 mr-1" />
               Save
-            </Button>
-          </div>
-        </div>
-      </div>
+                      </Button>
+                    </div>
+                  </div>
+                    </div>
     );
   }
 
@@ -898,7 +898,7 @@ export function AIAudioManagement() {
 
     return (
       <div className="space-y-6">
-        <div className="space-y-2">
+            <div className="space-y-2">
           <Label htmlFor="new-chapter-title" className="text-sm font-semibold text-gray-700">Chapter Title</Label>
           <Input
             id="new-chapter-title"
@@ -907,7 +907,7 @@ export function AIAudioManagement() {
             placeholder="Enter chapter title"
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
-        </div>
+            </div>
         
         <div className="flex justify-end gap-3 pt-4">
           <Button
@@ -930,38 +930,38 @@ export function AIAudioManagement() {
           >
             Add Chapter
           </Button>
-        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   function EditCategoryForm({ category, onSave, onCancel }: { category: any; onSave: (category: any) => void; onCancel: () => void }) {
     const [name, setName] = useState(category?.name || '');
     const [description, setDescription] = useState(category?.description || '');
     const [status, setStatus] = useState(category?.status || 'Draft');
-    const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState(category?.imageUrl || '');
-    const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-    const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        setImageFile(file);
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setImageFile(file);
         const result = await uploadService.uploadImage(file, `ai-audio/categories/${category.id}`);
         if (result.success && result.url) {
-          setImagePreview(result.url);
-        } else {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setImagePreview(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
+        setImagePreview(result.url);
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
       }
-    };
+    }
+  };
 
-    return (
-      <div className="space-y-6">
+  return (
+    <div className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="edit-category-name" className="text-sm font-semibold text-gray-700">Category Name</Label>
           <Input 
@@ -997,51 +997,51 @@ export function AIAudioManagement() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="edit-category-image" className="text-sm font-semibold text-gray-700">Category Image</Label>
-          {imagePreview && (
-            <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-orange-200/40">
-              <ImageWithFallback
-                src={imagePreview}
-                alt="Category preview"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => imageInputRef.current?.click()}
-              className="gap-2 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
-            >
-              <Upload className="h-4 w-4" />
-              {imagePreview ? 'Change Image' : 'Upload Image'}
-            </Button>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
+        {imagePreview && (
+          <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-orange-200/40">
+            <ImageWithFallback
+              src={imagePreview}
+              alt="Category preview"
+              className="w-full h-full object-cover"
             />
           </div>
-        </div>
-        <div className="flex justify-end gap-3 pt-4">
+        )}
+          <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => imageInputRef.current?.click()}
+              className="gap-2 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
+        >
+          <Upload className="h-4 w-4" />
+          {imagePreview ? 'Change Image' : 'Upload Image'}
+        </Button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          className="hidden"
+        />
+      </div>
+      </div>
+      <div className="flex justify-end gap-3 pt-4">
           <Button 
             variant="outline" 
             onClick={onCancel}
             className="rounded-xl border-orange-200 text-gray-700 hover:bg-orange-50"
           >
-            Cancel
-          </Button>
+          Cancel
+        </Button>
           <Button
             onClick={() => {
               if (!name.trim()) {
                 toast.error('Please enter a category name');
                 return;
               }
-              onSave({
+      onSave({
                 name: name.trim(),
-                description: description.trim(),
+        description: description.trim(),
                 status,
                 imageUrl: imagePreview
               });
@@ -1050,18 +1050,18 @@ export function AIAudioManagement() {
             className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
           >
             Update Category
-          </Button>
-        </div>
+        </Button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   function AddAudioItemForm({ chapterId, categoryId, onSave, onCancel }: { chapterId: string; categoryId: string; onSave: (item: any) => void; onCancel: () => void }) {
-    const [text, setText] = useState('');
+  const [text, setText] = useState('');
 
-    return (
-      <div className="space-y-6">
-        <div className="space-y-2">
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
           <Label htmlFor="new-audio-item-text" className="text-sm font-semibold text-gray-700">Text Content</Label>
           <Textarea
             id="new-audio-item-text"
@@ -1072,17 +1072,17 @@ export function AIAudioManagement() {
           />
           <div className="text-right">
             <span className="text-sm text-gray-500">{text.length} characters</span>
-          </div>
-        </div>
-        
-        <div className="flex justify-end gap-3 pt-4">
+      </div>
+      </div>
+      
+      <div className="flex justify-end gap-3 pt-4">
           <Button
             variant="outline"
             onClick={onCancel}
             className="rounded-xl border-orange-200 text-gray-700 hover:bg-orange-50"
           >
-            Cancel
-          </Button>
+          Cancel
+        </Button>
           <Button
             onClick={() => {
               onSave({
@@ -1093,92 +1093,92 @@ export function AIAudioManagement() {
             }}
             className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
           >
-            Add Audio Item
-          </Button>
-        </div>
+          Add Audio Item
+        </Button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  function AudioPlayer({ audioUrl, fileName, duration }: { audioUrl: string; fileName: string; duration?: string }) {
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [audioDuration, setAudioDuration] = useState(0);
+function AudioPlayer({ audioUrl, fileName, duration }: { audioUrl: string; fileName: string; duration?: string }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
 
-    const togglePlayback = () => {
+  const togglePlayback = () => {
       if (audioUrl) {
-        if (!audioElement) {
-          const audio = new Audio(audioUrl);
+    if (!audioElement) {
+      const audio = new Audio(audioUrl);
           audio.onended = () => setIsPlaying(false);
-          audio.onloadedmetadata = () => {
-            setAudioDuration(audio.duration);
-          };
-          audio.ontimeupdate = () => {
-            setCurrentTime(audio.currentTime);
-          };
-          setAudioElement(audio);
-        }
-        
-        if (isPlaying) {
+      audio.onloadedmetadata = () => {
+        setAudioDuration(audio.duration);
+      };
+      audio.ontimeupdate = () => {
+        setCurrentTime(audio.currentTime);
+      };
+      setAudioElement(audio);
+    }
+
+    if (isPlaying) {
           audioElement?.pause();
-          setIsPlaying(false);
-        } else {
+      setIsPlaying(false);
+    } else {
           audioElement?.play();
           setIsPlaying(true);
         }
-      }
-    };
+    }
+  };
 
-    const formatTime = (time: number) => {
-      const minutes = Math.floor(time / 60);
-      const seconds = Math.floor(time % 60);
-      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    };
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
-    return (
+  return (
       <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Volume2 className="h-5 w-5 text-green-600" />
               <span className="text-sm font-medium text-green-700">{fileName}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {audioDuration > 0 && (
+          </div>
+          <div className="flex items-center gap-2">
+            {audioDuration > 0 && (
                 <span className="text-xs text-green-600 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {formatTime(audioDuration)}
-                </span>
-              )}
-              <Button
-                onClick={togglePlayback}
-                size="sm"
+                <Clock className="h-3 w-3" />
+                {formatTime(audioDuration)}
+              </span>
+            )}
+            <Button
+              onClick={togglePlayback}
+              size="sm"
                 variant="ghost"
                 className="text-green-600 hover:bg-green-100 w-8 h-8 rounded-full p-0"
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Progress Bar */}
+        {audioDuration > 0 && (
+          <div className="space-y-1">
+              <div className="w-full bg-green-200 rounded-full h-1.5">
+              <div 
+                  className="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${(currentTime / audioDuration) * 100}%` }}
+              ></div>
+            </div>
+              <div className="flex justify-between text-xs text-green-600">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(audioDuration)}</span>
             </div>
           </div>
-          
-          {/* Progress Bar */}
-          {audioDuration > 0 && (
-            <div className="space-y-1">
-              <div className="w-full bg-green-200 rounded-full h-1.5">
-                <div 
-                  className="bg-green-500 h-1.5 rounded-full transition-all duration-300"
-                  style={{ width: `${(currentTime / audioDuration) * 100}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-xs text-green-600">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(audioDuration)}</span>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
-    );
+    </div>
+  );
   }
 }
