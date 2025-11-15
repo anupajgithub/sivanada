@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Image, Plus, Edit, Star, Download, Eye, Trash2 } from 'lucide-react';
 import { wallpaperService, uploadService } from '../services';
+import { toast } from 'sonner@2.0.3';
 
 // Mock wallpaper data
 const mockWallpapers = [
@@ -70,12 +71,8 @@ export function WallpapersManagement() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  // Form state for new wallpaper
-  const [newWallpaper, setNewWallpaper] = useState({
-    title: '',
-    category: 'nature',
-    imageFile: null as File | null
-  });
+  // Form state for new wallpapers (multiple files)
+  const [newWallpapers, setNewWallpapers] = useState<File[]>([]);
 
   // Load wallpapers from Firebase
   useEffect(() => {
@@ -101,46 +98,65 @@ export function WallpapersManagement() {
     ? wallpapers 
     : wallpapers.filter(w => w.category === selectedCategory);
 
-  const handleUploadWallpaper = async () => {
-    if (!newWallpaper.title.trim() || !newWallpaper.imageFile) {
-      alert('Please fill in all required fields');
+  const handleUploadWallpapers = async () => {
+    if (newWallpapers.length === 0) {
+      toast.error('Please select at least one image');
       return;
     }
 
     setUploading(true);
-    try {
-      const result = await wallpaperService.createWallpaper({
-        title: newWallpaper.title.trim(),
-        category: newWallpaper.category,
-        featured: false,
-        downloadCount: 0
-      });
+    let successCount = 0;
+    let failCount = 0;
 
-      if (result.success && result.data) {
-        // Upload image to Cloudinary
-        const uploadResult = await uploadService.uploadImage(newWallpaper.imageFile, `wallpapers/${result.data.id}`);
-        if (uploadResult.success) {
-          // Update wallpaper with image URL
-          await wallpaperService.updateWallpaper(result.data.id, { imageUrl: uploadResult.url });
-          
-          // Reload wallpapers
-          const reloadResult = await wallpaperService.getWallpapers();
-          if (reloadResult.success && reloadResult.data) {
-            setWallpapers(reloadResult.data);
+    try {
+      for (const imageFile of newWallpapers) {
+        try {
+          // Create wallpaper without title
+          const result = await wallpaperService.createWallpaper({
+            title: `Wallpaper ${Date.now()}`, // Auto-generated title
+            category: 'nature',
+            featured: false,
+            downloadCount: 0
+          });
+
+          if (result.success && result.data) {
+            // Upload image to Cloudinary
+            const uploadResult = await uploadService.uploadImage(imageFile, `wallpapers/${result.data.id}`);
+            if (uploadResult.success) {
+              // Update wallpaper with image URL
+              await wallpaperService.updateWallpaper(result.data.id, { imageUrl: uploadResult.url });
+              successCount++;
+            } else {
+              failCount++;
+              // Delete the created wallpaper if image upload failed
+              await wallpaperService.deleteWallpaper(result.data.id);
+            }
+          } else {
+            failCount++;
           }
-          
-          // Reset form
-          setNewWallpaper({ title: '', category: 'nature', imageFile: null });
-          setIsAddWallpaperOpen(false);
-          alert('Wallpaper uploaded successfully to Cloudinary!');
-        } else {
-          alert('Failed to upload image: ' + uploadResult.error);
+        } catch (error) {
+          failCount++;
+          console.error('Error uploading wallpaper:', error);
         }
+      }
+      
+      // Reload wallpapers
+      const reloadResult = await wallpaperService.getWallpapers();
+      if (reloadResult.success && reloadResult.data) {
+        setWallpapers(reloadResult.data);
+      }
+      
+      // Reset form
+      setNewWallpapers([]);
+      setIsAddWallpaperOpen(false);
+      
+      if (successCount > 0) {
+        toast.success(`Successfully uploaded ${successCount} wallpaper(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
       } else {
-        alert('Failed to create wallpaper: ' + result.error);
+        toast.error(`Failed to upload ${failCount} wallpaper(s)`);
       }
     } catch (error) {
-      alert('Error uploading wallpaper: ' + (error as Error).message);
+      toast.error('Error uploading wallpapers: ' + (error as Error).message);
     } finally {
       setUploading(false);
     }
@@ -212,63 +228,66 @@ export function WallpapersManagement() {
             </DialogHeader>
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title" className="text-sm font-semibold text-gray-700">Wallpaper Title</Label>
-                <Input 
-                  id="title" 
-                  placeholder="Enter wallpaper title" 
-                  value={newWallpaper.title}
-                  onChange={(e) => setNewWallpaper({ ...newWallpaper, title: e.target.value })}
-                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category" className="text-sm font-semibold text-gray-700">Category</Label>
-                <select 
-                  value={newWallpaper.category}
-                  onChange={(e) => setNewWallpaper({ ...newWallpaper, category: e.target.value })}
-                  className="w-full rounded-xl border border-orange-200/60 p-3 focus:border-orange-500 focus:ring-orange-500/20 focus:outline-none"
-                >
-                  <option value="nature">Nature</option>
-                  <option value="urban">Urban</option>
-                  <option value="abstract">Abstract</option>
-                  <option value="space">Space</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="image" className="text-sm font-semibold text-gray-700">Image Upload</Label>
+                <Label htmlFor="images" className="text-sm font-semibold text-gray-700">Upload Multiple Images</Label>
                 <div 
                   className="border-2 border-dashed border-orange-200 rounded-xl p-8 text-center cursor-pointer hover:border-orange-300 transition-colors"
-                  onClick={() => document.getElementById('image-upload')?.click()}
+                  onClick={() => document.getElementById('images-upload')?.click()}
                 >
                   <Image className="h-12 w-12 text-orange-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Drag & drop an image here, or click to browse</p>
-                  <p className="text-xs text-gray-500 mt-2">PNG, JPG up to 10MB</p>
-                  {newWallpaper.imageFile && (
-                    <p className="text-sm text-green-600 mt-2">Selected: {newWallpaper.imageFile.name}</p>
+                  <p className="text-gray-600">Drag & drop images here, or click to browse</p>
+                  <p className="text-xs text-gray-500 mt-2">PNG, JPG up to 10MB each. Select multiple files.</p>
+                  {newWallpapers.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-sm text-green-600 font-medium">{newWallpapers.length} image(s) selected:</p>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {newWallpapers.map((file, index) => (
+                          <p key={index} className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <input
-                  id="image-upload"
+                  id="images-upload"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setNewWallpaper({ ...newWallpaper, imageFile: e.target.files?.[0] || null })}
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setNewWallpapers([...newWallpapers, ...files]);
+                  }}
                   className="hidden"
                 />
+                {newWallpapers.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewWallpapers([])}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    Clear All
+                  </Button>
+                )}
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button 
                   variant="outline" 
-                  onClick={() => setIsAddWallpaperOpen(false)}
+                  onClick={() => {
+                    setIsAddWallpaperOpen(false);
+                    setNewWallpapers([]);
+                  }}
                   className="rounded-xl border-orange-200 text-gray-700 hover:bg-orange-50"
                 >
                   Cancel
                 </Button>
                 <Button 
-                  onClick={handleUploadWallpaper}
-                  disabled={uploading || !newWallpaper.title.trim() || !newWallpaper.imageFile}
+                  onClick={handleUploadWallpapers}
+                  disabled={uploading || newWallpapers.length === 0}
                   className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
                 >
-                  {uploading ? 'Uploading...' : 'Upload Wallpaper'}
+                  {uploading ? `Uploading ${newWallpapers.length}...` : `Upload ${newWallpapers.length} Wallpaper(s)`}
                 </Button>
               </div>
             </div>
@@ -276,7 +295,7 @@ export function WallpapersManagement() {
         </Dialog>
       </div>
 
-      {/* Category Filter */}
+      {/* Category Filter
       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl">
         <CardContent className="p-6">
           <div className="flex flex-wrap gap-3">
@@ -296,7 +315,7 @@ export function WallpapersManagement() {
             ))}
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Wallpapers Grid */}
       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">

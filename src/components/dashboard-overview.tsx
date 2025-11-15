@@ -209,8 +209,8 @@ export function DashboardOverview() {
                 }`}>
                   {stat.isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 </div>
-                <span>{stat.change}</span>
-                <span className="text-gray-500 font-normal">vs last month</span>
+                {/* <span>{stat.change}</span>
+                <span className="text-gray-500 font-normal">vs last month</span> */}
               </div>
             </CardContent>
             
@@ -221,7 +221,7 @@ export function DashboardOverview() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      {/* <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">
           <CardHeader className="pb-6 bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40">
             <div className="flex items-center justify-between">
@@ -335,7 +335,7 @@ export function DashboardOverview() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
     </div>
   );
 }

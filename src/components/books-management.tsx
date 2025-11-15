@@ -238,7 +238,7 @@ export function BooksManagement() {
               className="rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Books
+              Back to Categories
             </Button>
             <div className="space-y-1">
               <h1 className="text-3xl font-bold text-gray-900">{selectedBook.title}</h1>
@@ -365,35 +365,35 @@ export function BooksManagement() {
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">Books Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Categories Management</h1>
           <p className="text-gray-600 text-lg">
-            Manage Hindi and English books with chapter editing capabilities
+            Manage Hindi and English categories with chapter editing capabilities
           </p>
         </div>
         <Dialog open={isAddBookOpen} onOpenChange={setIsAddBookOpen}>
           <DialogTrigger asChild>
             <Button className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl">
               <Plus className="h-5 w-5" />
-              Add New Book
+              Add New Category
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] rounded-2xl border-orange-200/40">
             <DialogHeader className="pb-4">
-              <DialogTitle className="text-2xl font-bold text-gray-900">Add New Book</DialogTitle>
-              <p className="text-gray-600">Create a new book in your content library</p>
+              <DialogTitle className="text-2xl font-bold text-gray-900">Add New Category</DialogTitle>
+              <p className="text-gray-600">Create a new category in your content library</p>
             </DialogHeader>
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title" className="text-sm font-semibold text-gray-700">Book Title</Label>
+                <Label htmlFor="title" className="text-sm font-semibold text-gray-700">Category Title</Label>
                 <Input 
                   id="title" 
-                  placeholder="Enter book title" 
+                  placeholder="Enter category title" 
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
                 />
               </div>
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="author" className="text-sm font-semibold text-gray-700">Author Name</Label>
                 <Input 
                   id="author" 
@@ -402,7 +402,7 @@ export function BooksManagement() {
                   onChange={(e) => setNewAuthor(e.target.value)}
                   className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
                 />
-              </div>
+              </div> */}
               <div className="space-y-2">
                 <Label htmlFor="language" className="text-sm font-semibold text-gray-700">Language</Label>
                 <Select value={newLanguage} onValueChange={setNewLanguage}>
@@ -415,7 +415,7 @@ export function BooksManagement() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="category" className="text-sm font-semibold text-gray-700">Category</Label>
                 <Input 
                   id="category" 
@@ -424,7 +424,7 @@ export function BooksManagement() {
                   onChange={(e) => setNewCategory(e.target.value)}
                   className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
                 />
-              </div>
+              </div> */}
               <div className="space-y-2">
                 <Label htmlFor="cover" className="text-sm font-semibold text-gray-700">Cover Image</Label>
                 <Input 
@@ -474,7 +474,7 @@ export function BooksManagement() {
                   }}
                   className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
                 >
-                  Create Book
+                  Create Category
                 </Button>
               </div>
             </div>
@@ -524,20 +524,20 @@ export function BooksManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-2xl font-bold text-gray-900">Content Library</CardTitle>
-                <p className="text-gray-600 mt-1">Browse books by language</p>
+                <p className="text-gray-600 mt-1">Browse categories by language</p>
               </div>
-              <TabsList className="grid w-64 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
+              <TabsList className="grid w-92 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
                 <TabsTrigger 
                   value="hindi" 
                   className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
                 >
-                  Hindi Books ({hindiBooks.length})
+                  Hindi Categories ({hindiBooks.length})
                 </TabsTrigger>
                 <TabsTrigger 
                   value="english"
                   className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
                 >
-                  English Books ({englishBooks.length})
+                  English Categories ({englishBooks.length})
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -602,10 +602,10 @@ export function BooksManagement() {
                   <FileText className="h-4 w-4 text-orange-500" />
                   <span>{book.chapters} chapters</span>
                 </div>
-                <div className="flex items-center gap-1">
+                {/* <div className="flex items-center gap-1">
                   <Volume2 className="h-4 w-4 text-orange-500" />
                   <span>{book.audioChapters} audio</span>
-                </div>
+                </div> */}
               </div>
               
               {/* Actions */}
@@ -911,16 +911,16 @@ export function BooksManagement() {
     return (
       <div className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="edit-title" className="text-sm font-semibold text-gray-700">Book Title</Label>
+          <Label htmlFor="edit-title" className="text-sm font-semibold text-gray-700">Category Title</Label>
           <Input 
             id="edit-title" 
-            placeholder="Enter book title" 
+            placeholder="Enter category title" 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
         </div>
-        <div className="space-y-2">
+        {/* <div className="space-y-2">
           <Label htmlFor="edit-author" className="text-sm font-semibold text-gray-700">Author Name</Label>
           <Input 
             id="edit-author" 
@@ -929,8 +929,8 @@ export function BooksManagement() {
             onChange={(e) => setAuthor(e.target.value)}
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
-        </div>
-        <div className="space-y-2">
+        </div> */}
+        {/* <div className="space-y-2">
           <Label htmlFor="edit-description" className="text-sm font-semibold text-gray-700">Description</Label>
           <Textarea 
             id="edit-description" 
@@ -939,7 +939,7 @@ export function BooksManagement() {
             onChange={(e) => setDescription(e.target.value)}
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
-        </div>
+        </div> */}
         <div className="space-y-2">
           <Label htmlFor="edit-language" className="text-sm font-semibold text-gray-700">Language</Label>
           <Select value={language} onValueChange={setLanguage}>
@@ -952,7 +952,7 @@ export function BooksManagement() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
+        {/* <div className="space-y-2">
           <Label htmlFor="edit-category" className="text-sm font-semibold text-gray-700">Category</Label>
           <Input 
             id="edit-category" 
@@ -961,8 +961,8 @@ export function BooksManagement() {
             onChange={(e) => setCategory(e.target.value)}
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
-        </div>
-        <div className="space-y-2">
+        </div> */}
+        {/* <div className="space-y-2">
           <Label htmlFor="edit-status" className="text-sm font-semibold text-gray-700">Status</Label>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20">
@@ -974,7 +974,7 @@ export function BooksManagement() {
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </div> */}
 
         {/* Cover Image Upload */}
         <div className="space-y-4">
@@ -1021,7 +1021,7 @@ export function BooksManagement() {
             disabled={!title.trim() || !author.trim()}
             className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
           >
-            Update Book
+            Update Category
           </Button>
         </div>
       </div>

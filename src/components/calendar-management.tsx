@@ -192,7 +192,7 @@ export function CalendarManagement() {
               className="pl-10 bg-white border-orange-200 focus:border-orange-500"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          {/* <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-40 bg-white border-orange-200">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -215,7 +215,7 @@ export function CalendarManagement() {
               <SelectItem value="deadline">Deadline</SelectItem>
               <SelectItem value="reminder">Reminder</SelectItem>
             </SelectContent>
-          </Select>
+          </Select> */}
         </div>
 
         {/* Add Event Button */}
@@ -456,12 +456,12 @@ export function CalendarManagement() {
                 <div className="flex-1">
                   <CardTitle className="text-lg text-gray-900 line-clamp-1">{event.title}</CardTitle>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge className={`text-xs ${getStatusColor(event.status)}`}>
+                    {/* <Badge className={`text-xs ${getStatusColor(event.status)}`}>
                       {event.status}
                     </Badge>
                     <Badge className={`text-xs ${getPriorityColor(event.priority)}`}>
                       {event.priority}
-                    </Badge>
+                    </Badge> */}
                   </div>
                 </div>
                 <div className="flex gap-1 ml-2">
@@ -494,8 +494,8 @@ export function CalendarManagement() {
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Calendar className="h-4 w-4 text-orange-500" />
                   <span>{new Date(event.date).toLocaleDateString()}</span>
-                  <Clock className="h-4 w-4 text-orange-500 ml-2" />
-                  <span>{event.time}</span>
+                  {/* <Clock className="h-4 w-4 text-orange-500 ml-2" /> */}
+                  {/* <span>{event.time}</span> */}
                 </div>
                 
                 {event.location && (
@@ -505,18 +505,18 @@ export function CalendarManagement() {
                   </div>
                 )}
                 
-                {event.attendees && event.attendees > 0 && (
+                {/* {event.attendees && event.attendees > 0 && (
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Users className="h-4 w-4 text-orange-500" />
                     <span>{event.attendees} expected attendees</span>
                   </div>
-                )}
+                )} */}
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-orange-100">
-                <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
+                {/* <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
                   {event.category}
-                </Badge>
+                </Badge> */}
                 <span className="text-xs text-gray-500">
                   ID: {event.id}
                 </span>

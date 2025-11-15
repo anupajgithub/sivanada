@@ -196,7 +196,7 @@ export default function App() {
                 <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
                 <span className="text-xs font-medium">System Online</span>
               </div>
-              <p className="text-xs text-gray-500">© 2024 CMS Admin v1.0.0</p>
+              <p className="text-xs text-gray-500">© 2025 Sivanada.com - Admin</p>
             </div>
           </div>
         </div>
@@ -257,10 +257,10 @@ export default function App() {
                   </div>
                 </div>
                 <div className="p-1">
-                  <DropdownMenuItem className="cursor-pointer rounded-lg gap-3 p-3 hover:bg-orange-50">
+                  {/* <DropdownMenuItem className="cursor-pointer rounded-lg gap-3 p-3 hover:bg-orange-50">
                     <User className="h-4 w-4 text-orange-500" />
                     <span>Profile Settings</span>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem> */}
                   <DropdownMenuItem 
                     className="cursor-pointer rounded-lg gap-3 p-3 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:text-red-600"
                     onClick={handleLogout}

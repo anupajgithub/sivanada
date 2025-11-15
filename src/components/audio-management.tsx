@@ -105,8 +105,7 @@ export function AudioManagement() {
         category: a.category === 'bhajan' ? 'bhajan' : 'talks',
         status: a.status === 'published' ? 'Published' : a.status === 'draft' ? 'Draft' : 'Archived',
         audioFile: a.audioUrl || null,
-        duration: a.duration ? `${a.duration}` : null,
-        text: a.textContent || ''
+        duration: a.duration ? `${a.duration}` : null
       })));
     });
     return unsub;
@@ -162,7 +161,6 @@ export function AudioManagement() {
   function AudioEditor({ audio, onSave, onDelete }: { audio: any; onSave: (audio: any) => void; onDelete: (audioId: string) => void }) {
     const [title, setTitle] = useState(audio.title);
     const [description, setDescription] = useState(audio.description);
-    const [text, setText] = useState(audio.text);
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -171,8 +169,7 @@ export function AudioManagement() {
     try {
       const result = await audioService.updateAudio(audio.id, {
         title,
-        description,
-        textContent: text
+        description
       });
 
       if (result.success) {
@@ -187,16 +184,15 @@ export function AudioManagement() {
           ...audio,
           title,
           description,
-          text,
           audioFile: audioFile ? audioFile.name : audio.audioFile
         };
         onSave(updatedAudio);
-        alert('Audio updated successfully');
+        toast.success('Audio updated successfully');
       } else {
-        alert('Failed to update audio: ' + result.error);
+        toast.error('Failed to update audio: ' + result.error);
       }
     } catch (error) {
-      alert('Error updating audio: ' + (error as Error).message);
+      toast.error('Error updating audio: ' + (error as Error).message);
     }
   };
 
@@ -278,17 +274,6 @@ export function AudioManagement() {
                 />
               </div>
 
-              {/* Description */}
-              <div className="space-y-2">
-                <Label htmlFor="audio-description" className="text-sm font-semibold text-gray-700">Description</Label>
-                <Textarea
-                  id="audio-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[100px]"
-                  placeholder="Enter audio description"
-                />
-              </div>
 
               {/* Audio Upload */}
               <div className="space-y-4">
@@ -355,26 +340,26 @@ export function AudioManagement() {
             </CardContent>
           </Card>
 
-          {/* Text Content Section */}
+          {/* Description Section */}
           <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40 p-6">
               <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
                 <FileText className="h-6 w-6 text-orange-500" />
-                Text Content
+                Description
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <div className="space-y-4">
-                <Label className="text-sm font-semibold text-gray-700">Associated Text/Lyrics</Label>
+                <Label className="text-sm font-semibold text-gray-700">Audio Description</Label>
                 <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[400px] font-mono"
-                  placeholder="Enter the text content, lyrics, or transcript..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[400px]"
+                  placeholder="Enter detailed description about the audio content..."
                 />
                 <div className="text-right">
                   <span className="text-sm text-gray-500">
-                    {text.length} characters
+                    {description.length} characters
                   </span>
                 </div>
               </div>
@@ -607,14 +592,14 @@ export function AudioManagement() {
             </div>
           )}
 
-          {/* Text Preview */}
+          {/* Description Preview */}
           <div className="mb-4">
             <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
               <div className="flex items-center gap-2 mb-2">
                 <FileText className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Text Content</span>
               </div>
-              <p className="text-sm text-gray-600 line-clamp-3">{audio.text}</p>
+              <p className="text-sm text-gray-600 line-clamp-3">{audio.description}</p>
             </div>
           </div>
 
@@ -643,13 +628,13 @@ export function AudioManagement() {
               <Edit className="h-3 w-3 mr-1" />
               Edit
             </Button>
-            <Button 
+            {/* <Button 
               size="sm" 
               className="flex-1 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
             >
               <Play className="h-3 w-3 mr-1" />
               Preview
-            </Button>
+            </Button> */}
             <Button
               size="sm"
               variant="destructive"
@@ -672,16 +657,18 @@ export function AudioManagement() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('bhajan');
-    const [text, setText] = useState('');
     const [file, setFile] = useState<File | null>(null);
 
     const handleSubmit = () => {
-      if (!(title.trim() && description.trim() && category && text.trim())) return;
+      if (!(title.trim() && description.trim() && category)) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
       audioService.createAudio({
         title: title.trim(),
         description: description.trim(),
         category: category === 'bhajan' ? 'bhajan' : 'ai',
-        textContent: text.trim(),
+        textContent: '',
         audioUrl: '',
         duration: 0,
         status: 'draft',
@@ -697,12 +684,14 @@ export function AudioManagement() {
           }
         }
           onSave(res.data);
-          setTitle(''); setDescription(''); setCategory('bhajan'); setText(''); setFile(null);
+          setTitle(''); setDescription(''); setCategory('bhajan'); setFile(null);
+          toast.success('Audio created successfully');
           onCancel();
         } else {
-          // eslint-disable-next-line no-alert
-          alert(res.error || 'Failed to create audio');
+          toast.error(res.error || 'Failed to create audio');
         }
+      }).catch((error) => {
+        toast.error((error as Error).message || 'Failed to create audio');
       });
     };
 
@@ -720,12 +709,12 @@ export function AudioManagement() {
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="new-audio-description" className="text-sm font-semibold text-gray-700">Description</Label>
+          <Label htmlFor="new-audio-description" className="text-sm font-semibold text-gray-700">Text Content</Label>
           <Textarea
             id="new-audio-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter audio description"
+            placeholder="Enter text content or script..."
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
         </div>
@@ -741,17 +730,6 @@ export function AudioManagement() {
               <SelectItem value="talks">Talks</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="new-audio-text" className="text-sm font-semibold text-gray-700">Text Content</Label>
-          <Textarea
-            id="new-audio-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter lyrics, transcript, or associated text..."
-            className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[120px]"
-          />
         </div>
 
         <div className="space-y-2">
@@ -775,7 +753,7 @@ export function AudioManagement() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!title.trim() || !description.trim() || !category || !text.trim()}
+            disabled={!title.trim() || !description.trim() || !category}
             className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
           >
             Add Audio

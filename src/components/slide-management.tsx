@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -251,6 +251,8 @@ export function SlideManagement() {
   const [editingSlide, setEditingSlide] = useState<SlideContent | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
+  const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   const [newSlide, setNewSlide] = useState<Partial<SlideContent>>({
     title: { hindi: '', english: '' },
@@ -274,6 +276,118 @@ export function SlideManagement() {
     
     return matchesSearch && matchesStatus && matchesCategory;
   });
+
+  const parseCSV = (text: string): Array<{titleHindi: string, titleEnglish: string, descriptionHindi: string, descriptionEnglish: string}> => {
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return [];
+    
+    // Skip header row
+    const dataLines = lines.slice(1);
+    const slides: Array<{titleHindi: string, titleEnglish: string, descriptionHindi: string, descriptionEnglish: string}> = [];
+    
+    for (const line of dataLines) {
+      // Handle CSV with quotes and commas
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+      
+      // Expected format: Title Hindi, Title English, Description Hindi, Description English
+      if (values.length >= 4) {
+        slides.push({
+          titleHindi: values[0].replace(/^"|"$/g, ''),
+          titleEnglish: values[1].replace(/^"|"$/g, ''),
+          descriptionHindi: values[2].replace(/^"|"$/g, ''),
+          descriptionEnglish: values[3].replace(/^"|"$/g, '')
+        });
+      }
+    }
+    
+    return slides;
+  };
+
+  const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset input
+    if (event.target) event.target.value = '';
+
+    setIsUploadingCSV(true);
+    
+    try {
+      const text = await file.text();
+      const slidesData = parseCSV(text);
+      
+      if (slidesData.length === 0) {
+        toast.error('No valid data found in CSV file. Expected format: Title Hindi, Title English, Description Hindi, Description English');
+        setIsUploadingCSV(false);
+        return;
+      }
+
+      // Block in demo mode
+      if (typeof window !== 'undefined' && localStorage.getItem('demoUser')) {
+        toast.error('Demo mode cannot write to Firestore. Please log in with a Firebase admin account to upload slides.');
+        setIsUploadingCSV(false);
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const slideData of slidesData) {
+        try {
+          const result = await slideService.createSlide({
+            title: {
+              hindi: slideData.titleHindi.trim(),
+              english: slideData.titleEnglish.trim()
+            },
+            description: {
+              hindi: slideData.descriptionHindi.trim(),
+              english: slideData.descriptionEnglish.trim()
+            },
+            imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
+            status: 'draft',
+            featured: false,
+            category: 'spiritual',
+            priority: 1
+          });
+
+          if (result.success && result.data) {
+            successCount++;
+            setSlides(prev => [...prev, result.data!]);
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          failCount++;
+          console.error('Error creating slide:', error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} slide(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
+      } else {
+        toast.error(`Failed to import ${failCount} slide(s)`);
+      }
+    } catch (error) {
+      toast.error('Error reading CSV file: ' + (error as Error).message);
+    } finally {
+      setIsUploadingCSV(false);
+    }
+  };
 
   const generateImageForSlide = async (title: string) => {
     setIsImageUploading(true);
@@ -481,7 +595,7 @@ export function SlideManagement() {
       </div>
 
       {activeTab === 'top' ? (
-      <>
+      <React.Fragment>
       {/* Controls */}
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
         {/* Search and Filters */}
@@ -520,15 +634,32 @@ export function SlideManagement() {
           </Select>
         </div>
 
-        {/* Add Slide Button */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Slide
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Add Slide and CSV Upload Buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => csvFileInputRef.current?.click()}
+            className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50"
+            disabled={isUploadingCSV}
+          >
+            <Upload className="h-4 w-4" />
+            {isUploadingCSV ? 'Uploading...' : 'Upload CSV/Excel'}
+          </Button>
+          <input
+            ref={csvFileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={handleCSVUpload}
+            className="hidden"
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Slide
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingSlide ? 'Edit Slide' : 'Create New Slide'}</DialogTitle>
               <DialogDescription>
@@ -547,10 +678,10 @@ export function SlideManagement() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4 text-blue-500" />
-                    <h4 className="font-medium text-gray-900">English Content</h4>
+                    <h4 className="font-medium text-gray-900">English quotes</h4>
                   </div>
                   
-                  <div>
+                  {/* <div>
                     <Label htmlFor="title-en">Title (English) *</Label>
                     <Input
                       id="title-en"
@@ -571,10 +702,10 @@ export function SlideManagement() {
                       placeholder="Enter English title"
                       className="bg-white border-orange-200"
                     />
-                  </div>
+                  </div> */}
 
                   <div>
-                    <Label htmlFor="description-en">Description (English) *</Label>
+                    <Label htmlFor="description-en">Quotes (English) *</Label>
                     <Textarea
                       id="description-en"
                       value={editingSlide ? editingSlide.description.english : newSlide.description?.english || ''}
@@ -604,7 +735,7 @@ export function SlideManagement() {
                     <h4 className="font-medium text-gray-900">Hindi Content (हिंदी सामग्री)</h4>
                   </div>
                   
-                  <div>
+                  {/* <div>
                     <Label htmlFor="title-hi">Title (Hindi) * / शीर्षक (हिंदी) *</Label>
                     <Input
                       id="title-hi"
@@ -625,10 +756,10 @@ export function SlideManagement() {
                       placeholder="हिंदी शीर्षक दर्ज करें"
                       className="bg-white border-orange-200"
                     />
-                  </div>
+                  </div> */}
 
                   <div>
-                    <Label htmlFor="description-hi">Description (Hindi) * / विवरण (हिंदी) *</Label>
+                    <Label htmlFor="description-hi">Quotes (Hindi) * / कुछ और हिंदी का उदाहरण (हिंदी) *</Label>
                     <Textarea
                       id="description-hi"
                       value={editingSlide ? editingSlide.description.hindi : newSlide.description?.hindi || ''}
@@ -800,8 +931,9 @@ export function SlideManagement() {
                 {editingSlide ? 'Update Slide' : 'Create Slide'}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Slides Grid */}
@@ -809,12 +941,12 @@ export function SlideManagement() {
         {filteredSlides.map((slide) => (
           <Card key={slide.id} className="hover:shadow-lg transition-all duration-200 border-orange-200/40 bg-white">
             <div className="relative">
-              <ImageWithFallback
+              {/* <ImageWithFallback
                 src={slide.imageUrl}
                 alt={slide.title[languageView]}
                 className="w-full h-48 object-cover rounded-t-lg"
-              />
-              <div className="absolute top-3 left-3 flex gap-2">
+              /> */}
+              <div className="absolute top-10 left-3 flex gap-2">
                 <Badge className={`text-xs ${getStatusColor(slide.status)}`}>
                   {slide.status}
                 </Badge>
@@ -856,7 +988,7 @@ export function SlideManagement() {
               </div>
             </div>
             
-            <CardHeader className="pb-3">
+            {/* <CardHeader className="pb-3">
               <CardTitle className="text-lg text-gray-900 line-clamp-2">
                 {slide.title[languageView]}
               </CardTitle>
@@ -868,9 +1000,9 @@ export function SlideManagement() {
                   Priority: {slide.priority}
                 </Badge>
               </div>
-            </CardHeader>
+            </CardHeader> */}
             
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 mt-96">
               <p className="text-sm text-gray-600 line-clamp-3">
                 {slide.description[languageView]}
               </p>
@@ -900,7 +1032,7 @@ export function SlideManagement() {
           </p>
         </div>
       )}
-      </>
+      </React.Fragment>
       ) : (
         <MiddleSlidesPanel />
       )}

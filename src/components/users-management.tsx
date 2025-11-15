@@ -11,7 +11,8 @@ import { Label } from "./ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { MoreHorizontal, Search, UserPlus, Edit, Trash2, Ban, Upload, Camera } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { userService } from '../services';
+import { userService, uploadService } from '../services';
+import { toast } from 'sonner@2.0.3';
 
 function mapRoleToUi(role: string) {
   if (role === 'admin') return 'Admin';
@@ -83,58 +84,85 @@ export function UsersManagement() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      const result = await userService.deleteUser(userId);
-      if (result.success) {
-        // User will be removed from the list via Firebase subscription
-        alert('User deleted successfully');
-      } else {
-        alert(result.error || 'Failed to delete user');
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${userName}"? This action cannot be undone.`)) {
+      try {
+        const result = await userService.deleteUser(userId);
+        if (result.success) {
+          toast.success('User deleted successfully');
+        } else {
+          toast.error(result.error || 'Failed to delete user');
+        }
+      } catch (error) {
+        toast.error((error as Error).message || 'Failed to delete user');
       }
     }
   };
 
-  const handleBanUser = async (userId: string) => {
-    const result = await userService.updateUserStatus(userId, 'suspended');
-    if (result.success) {
-      // User status will be updated via Firebase subscription
-      alert('User banned successfully');
-    } else {
-      alert(result.error || 'Failed to ban user');
+  const handleBanUser = async (userId: string, userName: string) => {
+    if (window.confirm(`Are you sure you want to ban "${userName}"?`)) {
+      try {
+        const result = await userService.updateUserStatus(userId, 'suspended');
+        if (result.success) {
+          toast.success('User banned successfully');
+        } else {
+          toast.error(result.error || 'Failed to ban user');
+        }
+      } catch (error) {
+        toast.error((error as Error).message || 'Failed to ban user');
+      }
     }
   };
 
   const handleEditUser = (user: any) => {
+    console.log('Edit user clicked:', user);
+    if (!user || !user.id) {
+      toast.error('Invalid user data');
+      return;
+    }
+    // Add immediate feedback
+    toast.info('Opening edit dialog...');
     setEditingUser(user);
     setIsEditUserOpen(true);
   };
 
   const handleUpdateUser = async (updatedUser: any) => {
-    const roleMap: any = { 
-      'User': 'viewer', 
-      'Premium': 'editor', 
-      'Admin': 'admin' 
-    };
-    const statusMap: any = {
-      'Active': 'active',
-      'Inactive': 'inactive', 
-      'Banned': 'suspended'
-    };
+    try {
+      const roleMap: any = { 
+        'user': 'viewer',
+        'User': 'viewer', 
+        'premium': 'editor',
+        'Premium': 'editor', 
+        'admin': 'admin',
+        'Admin': 'admin' 
+      };
+      const statusMap: any = {
+        'active': 'active',
+        'Active': 'active',
+        'inactive': 'inactive',
+        'Inactive': 'inactive', 
+        'banned': 'suspended',
+        'Banned': 'suspended',
+        'suspended': 'suspended'
+      };
 
-    const result = await userService.updateUser(updatedUser.id, {
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: roleMap[updatedUser.role],
-      status: statusMap[updatedUser.status] || 'active'
-    });
+      const result = await userService.updateUser(updatedUser.id, {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: roleMap[updatedUser.role] || 'viewer',
+        status: statusMap[updatedUser.status] || 'active',
+        avatar: updatedUser.imageUrl || updatedUser.avatar
+      });
 
-    if (result.success) {
-      setIsEditUserOpen(false);
-      setEditingUser(null);
-      alert('User updated successfully');
-    } else {
-      alert(result.error || 'Failed to update user');
+      if (result.success) {
+        setIsEditUserOpen(false);
+        setEditingUser(null);
+        toast.success('User updated successfully');
+      } else {
+        toast.error(result.error || 'Failed to update user');
+      }
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to update user');
     }
   };
 
@@ -216,21 +244,28 @@ export function UsersManagement() {
                 </Button>
                 <Button
                   onClick={async () => {
-                    if (!newName.trim() || !newEmail.trim() || !newPassword.trim()) return;
-                    const roleMap: any = { user: 'viewer', premium: 'editor', admin: 'admin' };
-                    const res = await userService.createUser({
-                      name: newName.trim(),
-                      email: newEmail.trim(),
-                      role: roleMap[newRole],
-                      status: 'active',
-                      password: newPassword.trim()
-                    } as any);
-                    if (res.success) {
-                      setIsAddUserOpen(false);
-                      setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole('user');
-                    } else {
-                      // eslint-disable-next-line no-alert
-                      alert(res.error || 'Failed to create user');
+                    if (!newName.trim() || !newEmail.trim() || !newPassword.trim()) {
+                      toast.error('Please fill in all required fields');
+                      return;
+                    }
+                    try {
+                      const roleMap: any = { user: 'viewer', premium: 'editor', admin: 'admin' };
+                      const res = await userService.createUser({
+                        name: newName.trim(),
+                        email: newEmail.trim(),
+                        role: roleMap[newRole],
+                        status: 'active',
+                        password: newPassword.trim()
+                      } as any);
+                      if (res.success) {
+                        setIsAddUserOpen(false);
+                        setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole('user');
+                        toast.success('User created successfully');
+                      } else {
+                        toast.error(res.error || 'Failed to create user');
+                      }
+                    } catch (error) {
+                      toast.error((error as Error).message || 'Failed to create user');
                     }
                   }}
                   className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
@@ -357,27 +392,36 @@ export function UsersManagement() {
                             <MoreHorizontal className="h-5 w-5" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-xl border-orange-200/40 w-48">
+                        <DropdownMenuContent align="end" className="rounded-xl border-orange-200/40 w-48 z-50">
                           <DropdownMenuItem 
-                            onClick={() => handleEditUser(user)}
-                            className="rounded-lg gap-3 p-3 hover:bg-orange-50 cursor-pointer"
+                            onSelect={() => {
+                              console.log('Edit user triggered:', user);
+                              handleEditUser(user);
+                            }}
+                            className="rounded-lg gap-3 p-3 hover:bg-orange-50 cursor-pointer focus:bg-orange-50"
                           >
                             <Edit className="h-4 w-4 text-orange-500" />
-                            Edit User
+                            <span>Edit User</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => handleBanUser(user.id)}
-                            className="rounded-lg gap-3 p-3 hover:bg-yellow-50 cursor-pointer text-yellow-700"
+                            onSelect={() => {
+                              console.log('Ban user triggered:', user.id, user.name);
+                              handleBanUser(user.id, user.name);
+                            }}
+                            className="rounded-lg gap-3 p-3 hover:bg-yellow-50 cursor-pointer text-yellow-700 focus:bg-yellow-50"
                           >
                             <Ban className="h-4 w-4" />
-                            Ban User
+                            <span>Ban User</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            className="rounded-lg gap-3 p-3 text-red-600 hover:bg-red-50 cursor-pointer"
-                            onClick={() => handleDeleteUser(user.id)}
+                            onSelect={() => {
+                              console.log('Delete user triggered:', user.id, user.name);
+                              handleDeleteUser(user.id, user.name);
+                            }}
+                            className="rounded-lg gap-3 p-3 text-red-600 hover:bg-red-50 cursor-pointer focus:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete User
+                            <span>Delete User</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -431,15 +475,33 @@ function EditUserForm({ user, onSave, onCancel }: { user: any; onSave: (user: an
     }
   };
 
-  const handleSave = () => {
-    const updatedUser = {
-      ...user,
-      name,
-      email,
-      role: role.charAt(0).toUpperCase() + role.slice(1),
-      imageUrl: imagePreview || imageUrl
-    };
-    onSave(updatedUser);
+  const handleSave = async () => {
+    try {
+      let finalImageUrl = imageUrl;
+      
+      // Upload image if a new file was selected
+      if (imageFile) {
+        const uploadResult = await uploadService.uploadImage(imageFile, `users/avatars/${user.id}`);
+        if (uploadResult.success && uploadResult.url) {
+          finalImageUrl = uploadResult.url;
+        } else {
+          toast.error('Failed to upload image. User will be updated without image change.');
+        }
+      }
+
+      const updatedUser = {
+        ...user,
+        id: user.id,
+        name,
+        email,
+        role: role.charAt(0).toUpperCase() + role.slice(1),
+        imageUrl: finalImageUrl,
+        avatar: finalImageUrl
+      };
+      onSave(updatedUser);
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to save user');
+    }
   };
 
   return (
