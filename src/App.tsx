@@ -143,9 +143,9 @@ export default function App() {
   return (
     <div className="flex h-screen w-full bg-gradient-to-br from-orange-50/80 via-white to-orange-50/50">
       {/* Custom Sidebar */}
-      <aside className="w-72 bg-white/95 backdrop-blur-xl border-r border-orange-200/60 shadow-xl">
+      <aside className="w-72 bg-white/95 backdrop-blur-xl border-r border-orange-200/60 shadow-xl flex flex-col h-full">
         {/* Sidebar Header */}
-        <div className="h-20 px-6 flex items-center border-b border-orange-200/40 bg-gradient-to-r from-orange-500/5 to-orange-600/5">
+        <div className="h-20 px-6 flex items-center border-b border-orange-200/40 bg-gradient-to-r from-orange-500/5 to-orange-600/5 flex-shrink-0">
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -154,14 +154,14 @@ export default function App() {
               <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
             </div>
             <div>
-              <h2 className="font-bold text-xl text-gray-900">Sivanada Admin</h2>
+              <h2 className="font-bold text-xl text-gray-900">Swami Sivananda Admin</h2>
               <p className="text-xs text-orange-600 font-medium">Content Management</p>
             </div>
           </div>
         </div>
 
         {/* Navigation Menu */}
-        <nav className="p-2 space-y-2">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-2 pb-24">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -211,14 +211,14 @@ export default function App() {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-orange-50/50 to-transparent">
+        <div className="p-6 bg-gradient-to-t from-orange-50/50 to-transparent flex-shrink-0">
           <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40">
             <div className="text-center space-y-1">
               <div className="flex items-center justify-center gap-2 text-orange-600">
                 <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
                 <span className="text-xs font-medium">System Online</span>
               </div>
-              <p className="text-xs text-gray-500">© 2025 Sivanada.com - Admin</p>
+              <p className="text-xs text-gray-500">© 2025 Swami-Sivananda.com - Admin</p>
             </div>
           </div>
         </div>

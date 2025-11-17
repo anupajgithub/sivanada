@@ -185,3 +185,21 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Hide scrollbar but keep scrolling functionality */
+@layer utilities {
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  nav::-webkit-scrollbar,
+  [class*="overflow-auto"]::-webkit-scrollbar,
+  [class*="overflow-y-auto"]::-webkit-scrollbar {
+    display: none;
+    width: 0;
+  }
+
+  nav,
+  [class*="overflow-auto"],
+  [class*="overflow-y-auto"] {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+}

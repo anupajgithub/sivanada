@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -120,483 +122,86 @@ export function BooksManagement() {
     setChapters([]);
   };
 
-  // Rich Text Editor Component
+  // Rich Text Editor Component using React Quill
   function RichTextEditor({ content, onChange }: { content: string; onChange: (content: string) => void }) {
-    const editorRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const lastContentRef = useRef<string>(content);
-    const isInternalChangeRef = useRef(false);
-    const isInitializedRef = useRef(false);
-
-    // Save cursor position
-    const saveSelection = () => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return null;
-      const range = selection.getRangeAt(0);
-      // Clone the range to avoid issues
-      return range.cloneRange();
-    };
-
-    // Restore cursor position
-    const restoreSelection = (range: Range | null) => {
-      if (!range || !editorRef.current) return;
-      const selection = window.getSelection();
-      if (selection) {
-        try {
-          // Check if range is still valid
-          if (range.startContainer && editorRef.current.contains(range.startContainer)) {
-            selection.removeAllRanges();
-            selection.addRange(range);
-          } else {
-            // If range is invalid, place cursor at end
-            const newRange = document.createRange();
-            newRange.selectNodeContents(editorRef.current);
-            newRange.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(newRange);
-          }
-        } catch (e) {
-          // If restoration fails, place cursor at end
-          const newRange = document.createRange();
-          newRange.selectNodeContents(editorRef.current);
-          newRange.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
-        }
+    const quillRef = useRef<any>(null);
+    // Initialize with content - if it's plain text, convert to HTML for display
+    const [editorContent, setEditorContent] = useState(() => {
+      // If content looks like HTML (contains tags), use it as is
+      // Otherwise, treat it as plain text and wrap in paragraph
+      if (!content) return '';
+      if (content.includes('<') && content.includes('>')) {
+        return content;
       }
-    };
+      // Plain text - wrap in paragraph for Quill
+      return `<p>${content}</p>`;
+    });
 
-    const executeCommand = (command: string, value?: string) => {
-      const range = saveSelection();
-      if (editorRef.current) {
-        editorRef.current.focus();
-        document.execCommand(command, false, value);
-        // Get updated content
-        if (editorRef.current) {
-          isInternalChangeRef.current = true;
-          onChange(editorRef.current.innerHTML);
-          setTimeout(() => {
-            isInternalChangeRef.current = false;
-            restoreSelection(range);
-          }, 0);
-        }
-      }
-    };
-
-    const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const imageUrl = e.target?.result as string;
-          const range = saveSelection();
-          if (editorRef.current) {
-            editorRef.current.focus();
-            // Create wrapper div for image with close button
-            const wrapper = document.createElement('div');
-            wrapper.className = 'image-wrapper';
-            wrapper.style.position = 'relative';
-            wrapper.style.display = 'inline-block';
-            wrapper.style.margin = '8px 0';
-            wrapper.style.maxWidth = '100%';
-            wrapper.setAttribute('dir', 'ltr');
-            wrapper.style.direction = 'ltr';
-            
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            img.style.display = 'block';
-            img.className = 'editable-image';
-            
-            // Create close button
-            const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '×';
-            closeBtn.type = 'button';
-            closeBtn.style.position = 'absolute';
-            closeBtn.style.top = '4px';
-            closeBtn.style.right = '4px';
-            closeBtn.style.width = '24px';
-            closeBtn.style.height = '24px';
-            closeBtn.style.borderRadius = '50%';
-            closeBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-            closeBtn.style.color = 'white';
-            closeBtn.style.border = 'none';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.style.fontSize = '18px';
-            closeBtn.style.lineHeight = '1';
-            closeBtn.style.display = 'flex';
-            closeBtn.style.alignItems = 'center';
-            closeBtn.style.justifyContent = 'center';
-            closeBtn.style.zIndex = '10';
-            closeBtn.onclick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              wrapper.remove();
-              if (editorRef.current) {
-                onChange(editorRef.current.innerHTML);
-              }
-            };
-            
-            wrapper.appendChild(img);
-            wrapper.appendChild(closeBtn);
-            
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.insertNode(wrapper);
-              // Insert a text node after for cursor positioning
-              const textNode = document.createTextNode('\u200B'); // Zero-width space
-              range.setStartAfter(wrapper);
-              range.insertNode(textNode);
-              range.setStartAfter(textNode);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            } else {
-              editorRef.current.appendChild(wrapper);
-            }
-            
-            isInternalChangeRef.current = true;
-            onChange(editorRef.current.innerHTML);
-            setTimeout(() => {
-              isInternalChangeRef.current = false;
-            }, 0);
-          }
-        };
-        reader.readAsDataURL(file);
-        // Reset input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-
-    const handleContentChange = (e?: any) => {
-      if (editorRef.current && !isInternalChangeRef.current) {
-        // Force LTR direction on every change - simple approach
-        editorRef.current.setAttribute('dir', 'ltr');
-        editorRef.current.style.direction = 'ltr';
-        editorRef.current.style.textAlign = 'left';
-        
-        // Ensure all child elements are LTR (except image wrappers)
-        const allElements = editorRef.current.querySelectorAll('*:not(.image-wrapper)');
-        allElements.forEach((el: any) => {
-          if (el.style) {
-            el.style.direction = 'ltr';
-            el.style.textAlign = 'left';
-          }
-          if (el.setAttribute) {
-            el.setAttribute('dir', 'ltr');
-          }
-        });
-        
-        onChange(editorRef.current.innerHTML);
-      }
-    };
-
-    // Initialize content on mount and update when content changes externally
+    // Update local state when content prop changes externally
     useEffect(() => {
-      if (editorRef.current) {
-        // Initialize content on first mount
-        if (!isInitializedRef.current) {
-          editorRef.current.innerHTML = content || '';
-          lastContentRef.current = content || '';
-          isInitializedRef.current = true;
-          // Force LTR direction
-          editorRef.current.setAttribute('dir', 'ltr');
-          editorRef.current.style.direction = 'ltr';
-          editorRef.current.style.textAlign = 'left';
+      if (content) {
+        // If content is HTML, use it; otherwise wrap in paragraph
+        const htmlContent = content.includes('<') && content.includes('>') 
+          ? content 
+          : `<p>${content}</p>`;
+        if (htmlContent !== editorContent) {
+          setEditorContent(htmlContent);
         }
-        // Update content when it changes externally
-        else if (content !== lastContentRef.current && !isInternalChangeRef.current) {
-          const range = saveSelection();
-          editorRef.current.innerHTML = content || '';
-          lastContentRef.current = content || '';
-          // Force LTR after content update
-          editorRef.current.setAttribute('dir', 'ltr');
-          editorRef.current.style.direction = 'ltr';
-          editorRef.current.style.textAlign = 'left';
-          setTimeout(() => {
-            restoreSelection(range);
-          }, 0);
-        }
+      } else if (content === '' && editorContent) {
+        setEditorContent('');
       }
     }, [content]);
 
-    // Force LTR on focus and input events, prevent text reversal
-    useEffect(() => {
-      const editor = editorRef.current;
-      if (!editor) return;
+    // Configure Quill modules
+    const modules = React.useMemo(() => ({
+      toolbar: {
+        container: [
+          ['bold', 'italic'],
+          [{ 'header': [3, false] }],
+        ],
+      },
+    }), []);
 
-      const forceLTR = () => {
-        editor.setAttribute('dir', 'ltr');
-        editor.style.direction = 'ltr';
-        editor.style.textAlign = 'left';
-        editor.style.unicodeBidi = 'embed';
-        
-        // Force LTR on all child elements
-        const allElements = editor.querySelectorAll('*');
-        allElements.forEach((el: any) => {
-          if (el.style) {
-            el.style.direction = 'ltr';
-            el.style.textAlign = 'left';
-            el.style.unicodeBidi = 'embed';
-          }
-          if (el.setAttribute) {
-            el.setAttribute('dir', 'ltr');
-          }
-        });
-      };
+    const formats = ['bold', 'italic', 'header'];
 
+    const handleChange = (value: string) => {
+      setEditorContent(value);
+      // Pass HTML to parent - we'll convert to plain text only when saving
+      onChange(value);
+    };
 
-      const handleKeyDown = (e: KeyboardEvent) => {
-        // Force LTR on every keystroke
-        forceLTR();
-        
-        // Intercept ALL text input to prevent reversal
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            
-            // Ensure we're in an LTR context
-            let container: Node = range.startContainer;
-            let parentElement: HTMLElement | null = null;
-            
-            if (container.nodeType === Node.TEXT_NODE) {
-              parentElement = container.parentElement;
-            } else if (container.nodeType === Node.ELEMENT_NODE) {
-              parentElement = container as HTMLElement;
-            }
-            
-            // Force LTR on parent
-            if (parentElement) {
-              parentElement.setAttribute('dir', 'ltr');
-              parentElement.style.direction = 'ltr';
-              parentElement.style.textAlign = 'left';
-              parentElement.style.unicodeBidi = 'embed';
-            }
-            
-            // Delete any selected content
-            range.deleteContents();
-            
-            // Create and insert text node
-            const textNode = document.createTextNode(e.key);
-            range.insertNode(textNode);
-            
-            // Move cursor after inserted text
-            range.setStartAfter(textNode);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
-            
-            // Trigger input event
-            editor.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        }
-        // Handle backspace
-        else if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey) {
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            if (range.collapsed) {
-              // If cursor is at start of text node, move to end of previous
-              if (range.startOffset === 0) {
-                const container = range.startContainer;
-                if (container.nodeType === Node.TEXT_NODE && container.previousSibling) {
-                  const prevNode = container.previousSibling;
-                  if (prevNode.nodeType === Node.TEXT_NODE) {
-                    const newRange = document.createRange();
-                    newRange.setStart(prevNode, (prevNode as Text).length);
-                    newRange.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
-                    e.preventDefault();
-                    // Delete the character
-                    const textNode = prevNode as Text;
-                    textNode.textContent = textNode.textContent!.slice(0, -1);
-                    editor.dispatchEvent(new Event('input', { bubbles: true }));
-                  }
-                }
-              } else {
-                // Normal backspace - delete character before cursor
-                const container = range.startContainer;
-                if (container.nodeType === Node.TEXT_NODE) {
-                  const textNode = container as Text;
-                  const newText = textNode.textContent!.slice(0, range.startOffset - 1) + 
-                                 textNode.textContent!.slice(range.startOffset);
-                  textNode.textContent = newText;
-                  const newRange = document.createRange();
-                  newRange.setStart(textNode, range.startOffset - 1);
-                  newRange.collapse(true);
-                  selection.removeAllRanges();
-                  selection.addRange(newRange);
-                  e.preventDefault();
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }
-            } else {
-              // Delete selected content
-              range.deleteContents();
-              e.preventDefault();
-              editor.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          }
-        }
-      };
-
-      editor.addEventListener('focus', forceLTR);
-      editor.addEventListener('input', forceLTR);
-      editor.addEventListener('keydown', handleKeyDown);
-      editor.addEventListener('keyup', forceLTR);
-
-      return () => {
-        editor.removeEventListener('focus', forceLTR);
-        editor.removeEventListener('input', forceLTR);
-        editor.removeEventListener('keydown', handleKeyDown);
-        editor.removeEventListener('keyup', forceLTR);
-      };
-    }, []);
-
-    // Make existing images removable with close button
-    useEffect(() => {
-      if (editorRef.current) {
-        const images = editorRef.current.querySelectorAll('img:not(.image-wrapper img)');
-        images.forEach((img) => {
-          if (!img.closest('.image-wrapper')) {
-            // Wrap existing images in wrapper with close button
-            const wrapper = document.createElement('div');
-            wrapper.className = 'image-wrapper';
-            wrapper.style.position = 'relative';
-            wrapper.style.display = 'inline-block';
-            wrapper.style.margin = '8px 0';
-            wrapper.style.maxWidth = '100%';
-            wrapper.setAttribute('dir', 'ltr');
-            wrapper.style.direction = 'ltr';
-            
-            (img as HTMLElement).style.maxWidth = '100%';
-            (img as HTMLElement).style.height = 'auto';
-            (img as HTMLElement).style.display = 'block';
-            img.className = 'editable-image';
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '×';
-            closeBtn.type = 'button';
-            closeBtn.style.position = 'absolute';
-            closeBtn.style.top = '4px';
-            closeBtn.style.right = '4px';
-            closeBtn.style.width = '24px';
-            closeBtn.style.height = '24px';
-            closeBtn.style.borderRadius = '50%';
-            closeBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-            closeBtn.style.color = 'white';
-            closeBtn.style.border = 'none';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.style.fontSize = '18px';
-            closeBtn.style.lineHeight = '1';
-            closeBtn.style.display = 'flex';
-            closeBtn.style.alignItems = 'center';
-            closeBtn.style.justifyContent = 'center';
-            closeBtn.style.zIndex = '10';
-            closeBtn.onclick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              wrapper.remove();
-              if (editorRef.current) {
-                onChange(editorRef.current.innerHTML);
-              }
-            };
-            
-            img.parentNode?.replaceChild(wrapper, img);
-            wrapper.appendChild(img);
-            wrapper.appendChild(closeBtn);
-          }
-        });
-      }
-    }, [content, onChange]);
 
     return (
       <div className="border border-orange-200 rounded-xl overflow-hidden bg-white">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 p-3 bg-orange-50/50 border-b border-orange-200">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => executeCommand('bold')}
-            className="h-8 w-8 p-0 hover:bg-orange-100"
-          >
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => executeCommand('italic')}
-            className="h-8 w-8 p-0 hover:bg-orange-100"
-          >
-            <Italic className="h-4 w-4" />
-          </Button>
-          <Separator orientation="vertical" className="h-6 bg-orange-200" />
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => fileInputRef.current?.click()}
-            className="h-8 w-8 p-0 hover:bg-orange-100"
-          >
-            <Image className="h-4 w-4" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-          <Separator orientation="vertical" className="h-6 bg-orange-200" />
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => executeCommand('formatBlock', 'h3')}
-            className="h-8 px-3 hover:bg-orange-100 text-xs"
-          >
-            H3
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => executeCommand('formatBlock', 'p')}
-            className="h-8 px-3 hover:bg-orange-100 text-xs"
-          >
-            P
-          </Button>
-        </div>
-        
-        {/* Editor */}
-        <div
-          ref={editorRef}
-          contentEditable
-          onInput={handleContentChange}
-          dir="ltr"
-          spellCheck={false}
-          lang="en"
-          className="min-h-[400px] p-4 focus:outline-none"
-          style={{
-            lineHeight: '1.6',
-            direction: 'ltr',
-            textAlign: 'left',
-            unicodeBidi: 'bidi-override',
-            writingMode: 'horizontal-tb',
-          }}
-          suppressContentEditableWarning={true}
+        <ReactQuill
+          ref={quillRef}
+          theme="snow"
+          value={editorContent}
+          onChange={handleChange}
+          modules={modules}
+          formats={formats}
+          placeholder="Start typing..."
+          className="rich-text-editor"
         />
+        <style>{`
+          .rich-text-editor .ql-editor {
+            direction: ltr !important;
+            text-align: left !important;
+            min-height: 400px;
+          }
+          .rich-text-editor .ql-container {
+            direction: ltr !important;
+            font-family: inherit;
+          }
+          .rich-text-editor .ql-toolbar {
+            background-color: rgb(255 247 237);
+            border-bottom: 1px solid rgb(254 215 170);
+          }
+          .rich-text-editor .ql-editor.ql-blank::before {
+            direction: ltr;
+            text-align: left;
+          }
+        `}</style>
       </div>
     );
   }
@@ -1049,23 +654,38 @@ export function BooksManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
+    // Extract plain text from HTML
+    const extractPlainText = (html: string): string => {
+      if (!html) return '';
+      // Create a temporary div to parse HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      // Get text content and clean it up
+      let text = tempDiv.textContent || tempDiv.innerText || '';
+      // Remove extra whitespace and newlines, but preserve single spaces
+      text = text.replace(/\s+/g, ' ').trim();
+      return text;
+    };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const result = await bookService.updateChapter(chapter.id, { title, content });
+      // Convert HTML content to plain text before saving
+      const plainTextContent = extractPlainText(content);
+      const result = await bookService.updateChapter(chapter.id, { title, content: plainTextContent });
       if (result.success) {
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `books/audio/${chapter.id}`);
           if (uploadResult.success && uploadResult.url) {
             // Update chapter with audio URL
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
-            onSave({ ...chapter, title, content, audioFile: audioFile.name, audioUrl: uploadResult.url });
+            onSave({ ...chapter, title, content: plainTextContent, audioFile: audioFile.name, audioUrl: uploadResult.url });
           } else {
             toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
-            onSave({ ...chapter, title, content, audioFile: audioFile.name });
+            onSave({ ...chapter, title, content: plainTextContent, audioFile: audioFile.name });
           }
         } else {
-          onSave({ ...chapter, title, content });
+          onSave({ ...chapter, title, content: plainTextContent });
         }
         toast.success('Chapter saved successfully');
       } else {
