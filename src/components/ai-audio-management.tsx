@@ -556,6 +556,7 @@ export function AIAudioManagement() {
     const [text, setText] = useState('');
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [audioUrl, setAudioUrl] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -582,11 +583,13 @@ export function AIAudioManagement() {
     }, [chapter.id, category.id]);
 
     const handleSave = async () => {
+      setIsSaving(true);
       try {
         // Update chapter title
         const chapterResult = await aiAudioService.updateChapter(chapter.id, { title, description: '' });
         if (!chapterResult.success) {
           toast.error('Failed to save chapter: ' + chapterResult.error);
+          setIsSaving(false);
           return;
         }
 
@@ -605,6 +608,7 @@ export function AIAudioManagement() {
                 finalAudioUrl = uploadResult.url;
                       } else {
                 toast.error('Failed to upload audio file');
+                setIsSaving(false);
                 return;
               }
             }
@@ -653,6 +657,8 @@ export function AIAudioManagement() {
                   }
                 } catch (error) {
         toast.error('Error saving chapter: ' + (error as Error).message);
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -689,11 +695,21 @@ export function AIAudioManagement() {
                 </Button>
                 <Button
                 onClick={handleSave}
+                  disabled={isSaving}
                   size="sm"
-                className="gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                className="gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
               >
-                <Save className="h-4 w-4" />
-                Save
+                {isSaving ? (
+                  <>
+                    <Clock className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save
+                  </>
+                )}
                 </Button>
               </div>
       </div>
@@ -765,9 +781,11 @@ export function AIAudioManagement() {
   function AudioItemEditor({ audioItem, onSave, onClose }: { audioItem: any; onSave: (item: any) => void; onClose: () => void }) {
     const [text, setText] = useState(audioItem.text || '');
     const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
+      setIsSaving(true);
       try {
         let audioUrl = audioItem.audioUrl;
         if (audioFile) {
@@ -776,6 +794,7 @@ export function AIAudioManagement() {
             audioUrl = uploadResult.url;
     } else {
             toast.error('Failed to upload audio file');
+            setIsSaving(false);
             return;
           }
         }
@@ -801,8 +820,10 @@ export function AIAudioManagement() {
         }
       } catch (error) {
         toast.error('Error saving audio item: ' + (error as Error).message);
-    }
-  };
+      } finally {
+        setIsSaving(false);
+      }
+    };
 
     const handleAudioUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -881,11 +902,21 @@ export function AIAudioManagement() {
             </Button>
             <Button
               onClick={handleSave}
+              disabled={isSaving}
               size="sm"
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+              className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
             >
-              <Save className="h-4 w-4 mr-1" />
-              Save
+              {isSaving ? (
+                <>
+                  <Clock className="h-4 w-4 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </>
+              )}
                       </Button>
                     </div>
                   </div>

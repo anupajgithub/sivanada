@@ -36,6 +36,7 @@ export function BooksManagement() {
   const [isAddChapterOpen, setIsAddChapterOpen] = useState(false);
   const [isEditBookOpen, setIsEditBookOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<any>(null);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   const hindiBooks = books.filter(b => b.language === 'hindi');
   const englishBooks = books.filter(b => b.language === 'english');
@@ -123,13 +124,62 @@ export function BooksManagement() {
   function RichTextEditor({ content, onChange }: { content: string; onChange: (content: string) => void }) {
     const editorRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const lastContentRef = useRef<string>(content);
+    const isInternalChangeRef = useRef(false);
+    const isInitializedRef = useRef(false);
+
+    // Save cursor position
+    const saveSelection = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return null;
+      const range = selection.getRangeAt(0);
+      // Clone the range to avoid issues
+      return range.cloneRange();
+    };
+
+    // Restore cursor position
+    const restoreSelection = (range: Range | null) => {
+      if (!range || !editorRef.current) return;
+      const selection = window.getSelection();
+      if (selection) {
+        try {
+          // Check if range is still valid
+          if (range.startContainer && editorRef.current.contains(range.startContainer)) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            // If range is invalid, place cursor at end
+            const newRange = document.createRange();
+            newRange.selectNodeContents(editorRef.current);
+            newRange.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          }
+        } catch (e) {
+          // If restoration fails, place cursor at end
+          const newRange = document.createRange();
+          newRange.selectNodeContents(editorRef.current);
+          newRange.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+      }
+    };
 
     const executeCommand = (command: string, value?: string) => {
-      document.execCommand(command, false, value);
-      editorRef.current?.focus();
-      // Get updated content
+      const range = saveSelection();
       if (editorRef.current) {
-        onChange(editorRef.current.innerHTML);
+        editorRef.current.focus();
+        document.execCommand(command, false, value);
+        // Get updated content
+        if (editorRef.current) {
+          isInternalChangeRef.current = true;
+          onChange(editorRef.current.innerHTML);
+          setTimeout(() => {
+            isInternalChangeRef.current = false;
+            restoreSelection(range);
+          }, 0);
+        }
       }
     };
 
@@ -139,17 +189,335 @@ export function BooksManagement() {
         const reader = new FileReader();
         reader.onload = (e) => {
           const imageUrl = e.target?.result as string;
-          executeCommand('insertImage', imageUrl);
+          const range = saveSelection();
+          if (editorRef.current) {
+            editorRef.current.focus();
+            // Create wrapper div for image with close button
+            const wrapper = document.createElement('div');
+            wrapper.className = 'image-wrapper';
+            wrapper.style.position = 'relative';
+            wrapper.style.display = 'inline-block';
+            wrapper.style.margin = '8px 0';
+            wrapper.style.maxWidth = '100%';
+            wrapper.setAttribute('dir', 'ltr');
+            wrapper.style.direction = 'ltr';
+            
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.style.display = 'block';
+            img.className = 'editable-image';
+            
+            // Create close button
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.type = 'button';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '4px';
+            closeBtn.style.right = '4px';
+            closeBtn.style.width = '24px';
+            closeBtn.style.height = '24px';
+            closeBtn.style.borderRadius = '50%';
+            closeBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+            closeBtn.style.color = 'white';
+            closeBtn.style.border = 'none';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.fontSize = '18px';
+            closeBtn.style.lineHeight = '1';
+            closeBtn.style.display = 'flex';
+            closeBtn.style.alignItems = 'center';
+            closeBtn.style.justifyContent = 'center';
+            closeBtn.style.zIndex = '10';
+            closeBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              wrapper.remove();
+              if (editorRef.current) {
+                onChange(editorRef.current.innerHTML);
+              }
+            };
+            
+            wrapper.appendChild(img);
+            wrapper.appendChild(closeBtn);
+            
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              range.insertNode(wrapper);
+              // Insert a text node after for cursor positioning
+              const textNode = document.createTextNode('\u200B'); // Zero-width space
+              range.setStartAfter(wrapper);
+              range.insertNode(textNode);
+              range.setStartAfter(textNode);
+              range.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(range);
+            } else {
+              editorRef.current.appendChild(wrapper);
+            }
+            
+            isInternalChangeRef.current = true;
+            onChange(editorRef.current.innerHTML);
+            setTimeout(() => {
+              isInternalChangeRef.current = false;
+            }, 0);
+          }
         };
         reader.readAsDataURL(file);
+        // Reset input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
 
-    const handleContentChange = () => {
-      if (editorRef.current) {
+    const handleContentChange = (e?: any) => {
+      if (editorRef.current && !isInternalChangeRef.current) {
+        // Force LTR direction on every change - simple approach
+        editorRef.current.setAttribute('dir', 'ltr');
+        editorRef.current.style.direction = 'ltr';
+        editorRef.current.style.textAlign = 'left';
+        
+        // Ensure all child elements are LTR (except image wrappers)
+        const allElements = editorRef.current.querySelectorAll('*:not(.image-wrapper)');
+        allElements.forEach((el: any) => {
+          if (el.style) {
+            el.style.direction = 'ltr';
+            el.style.textAlign = 'left';
+          }
+          if (el.setAttribute) {
+            el.setAttribute('dir', 'ltr');
+          }
+        });
+        
         onChange(editorRef.current.innerHTML);
       }
     };
+
+    // Initialize content on mount and update when content changes externally
+    useEffect(() => {
+      if (editorRef.current) {
+        // Initialize content on first mount
+        if (!isInitializedRef.current) {
+          editorRef.current.innerHTML = content || '';
+          lastContentRef.current = content || '';
+          isInitializedRef.current = true;
+          // Force LTR direction
+          editorRef.current.setAttribute('dir', 'ltr');
+          editorRef.current.style.direction = 'ltr';
+          editorRef.current.style.textAlign = 'left';
+        }
+        // Update content when it changes externally
+        else if (content !== lastContentRef.current && !isInternalChangeRef.current) {
+          const range = saveSelection();
+          editorRef.current.innerHTML = content || '';
+          lastContentRef.current = content || '';
+          // Force LTR after content update
+          editorRef.current.setAttribute('dir', 'ltr');
+          editorRef.current.style.direction = 'ltr';
+          editorRef.current.style.textAlign = 'left';
+          setTimeout(() => {
+            restoreSelection(range);
+          }, 0);
+        }
+      }
+    }, [content]);
+
+    // Force LTR on focus and input events, prevent text reversal
+    useEffect(() => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      const forceLTR = () => {
+        editor.setAttribute('dir', 'ltr');
+        editor.style.direction = 'ltr';
+        editor.style.textAlign = 'left';
+        editor.style.unicodeBidi = 'embed';
+        
+        // Force LTR on all child elements
+        const allElements = editor.querySelectorAll('*');
+        allElements.forEach((el: any) => {
+          if (el.style) {
+            el.style.direction = 'ltr';
+            el.style.textAlign = 'left';
+            el.style.unicodeBidi = 'embed';
+          }
+          if (el.setAttribute) {
+            el.setAttribute('dir', 'ltr');
+          }
+        });
+      };
+
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Force LTR on every keystroke
+        forceLTR();
+        
+        // Intercept ALL text input to prevent reversal
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            
+            // Ensure we're in an LTR context
+            let container: Node = range.startContainer;
+            let parentElement: HTMLElement | null = null;
+            
+            if (container.nodeType === Node.TEXT_NODE) {
+              parentElement = container.parentElement;
+            } else if (container.nodeType === Node.ELEMENT_NODE) {
+              parentElement = container as HTMLElement;
+            }
+            
+            // Force LTR on parent
+            if (parentElement) {
+              parentElement.setAttribute('dir', 'ltr');
+              parentElement.style.direction = 'ltr';
+              parentElement.style.textAlign = 'left';
+              parentElement.style.unicodeBidi = 'embed';
+            }
+            
+            // Delete any selected content
+            range.deleteContents();
+            
+            // Create and insert text node
+            const textNode = document.createTextNode(e.key);
+            range.insertNode(textNode);
+            
+            // Move cursor after inserted text
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            // Trigger input event
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+        // Handle backspace
+        else if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (range.collapsed) {
+              // If cursor is at start of text node, move to end of previous
+              if (range.startOffset === 0) {
+                const container = range.startContainer;
+                if (container.nodeType === Node.TEXT_NODE && container.previousSibling) {
+                  const prevNode = container.previousSibling;
+                  if (prevNode.nodeType === Node.TEXT_NODE) {
+                    const newRange = document.createRange();
+                    newRange.setStart(prevNode, (prevNode as Text).length);
+                    newRange.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+                    e.preventDefault();
+                    // Delete the character
+                    const textNode = prevNode as Text;
+                    textNode.textContent = textNode.textContent!.slice(0, -1);
+                    editor.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
+                }
+              } else {
+                // Normal backspace - delete character before cursor
+                const container = range.startContainer;
+                if (container.nodeType === Node.TEXT_NODE) {
+                  const textNode = container as Text;
+                  const newText = textNode.textContent!.slice(0, range.startOffset - 1) + 
+                                 textNode.textContent!.slice(range.startOffset);
+                  textNode.textContent = newText;
+                  const newRange = document.createRange();
+                  newRange.setStart(textNode, range.startOffset - 1);
+                  newRange.collapse(true);
+                  selection.removeAllRanges();
+                  selection.addRange(newRange);
+                  e.preventDefault();
+                  editor.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              }
+            } else {
+              // Delete selected content
+              range.deleteContents();
+              e.preventDefault();
+              editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
+        }
+      };
+
+      editor.addEventListener('focus', forceLTR);
+      editor.addEventListener('input', forceLTR);
+      editor.addEventListener('keydown', handleKeyDown);
+      editor.addEventListener('keyup', forceLTR);
+
+      return () => {
+        editor.removeEventListener('focus', forceLTR);
+        editor.removeEventListener('input', forceLTR);
+        editor.removeEventListener('keydown', handleKeyDown);
+        editor.removeEventListener('keyup', forceLTR);
+      };
+    }, []);
+
+    // Make existing images removable with close button
+    useEffect(() => {
+      if (editorRef.current) {
+        const images = editorRef.current.querySelectorAll('img:not(.image-wrapper img)');
+        images.forEach((img) => {
+          if (!img.closest('.image-wrapper')) {
+            // Wrap existing images in wrapper with close button
+            const wrapper = document.createElement('div');
+            wrapper.className = 'image-wrapper';
+            wrapper.style.position = 'relative';
+            wrapper.style.display = 'inline-block';
+            wrapper.style.margin = '8px 0';
+            wrapper.style.maxWidth = '100%';
+            wrapper.setAttribute('dir', 'ltr');
+            wrapper.style.direction = 'ltr';
+            
+            (img as HTMLElement).style.maxWidth = '100%';
+            (img as HTMLElement).style.height = 'auto';
+            (img as HTMLElement).style.display = 'block';
+            img.className = 'editable-image';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.type = 'button';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '4px';
+            closeBtn.style.right = '4px';
+            closeBtn.style.width = '24px';
+            closeBtn.style.height = '24px';
+            closeBtn.style.borderRadius = '50%';
+            closeBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+            closeBtn.style.color = 'white';
+            closeBtn.style.border = 'none';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.fontSize = '18px';
+            closeBtn.style.lineHeight = '1';
+            closeBtn.style.display = 'flex';
+            closeBtn.style.alignItems = 'center';
+            closeBtn.style.justifyContent = 'center';
+            closeBtn.style.zIndex = '10';
+            closeBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              wrapper.remove();
+              if (editorRef.current) {
+                onChange(editorRef.current.innerHTML);
+              }
+            };
+            
+            img.parentNode?.replaceChild(wrapper, img);
+            wrapper.appendChild(img);
+            wrapper.appendChild(closeBtn);
+          }
+        });
+      }
+    }, [content, onChange]);
 
     return (
       <div className="border border-orange-200 rounded-xl overflow-hidden bg-white">
@@ -216,11 +584,18 @@ export function BooksManagement() {
           ref={editorRef}
           contentEditable
           onInput={handleContentChange}
-          dangerouslySetInnerHTML={{ __html: content }}
+          dir="ltr"
+          spellCheck={false}
+          lang="en"
           className="min-h-[400px] p-4 focus:outline-none"
           style={{
             lineHeight: '1.6',
+            direction: 'ltr',
+            textAlign: 'left',
+            unicodeBidi: 'bidi-override',
+            writingMode: 'horizontal-tb',
           }}
+          suppressContentEditableWarning={true}
         />
       </div>
     );
@@ -449,34 +824,49 @@ export function BooksManagement() {
                       toast.error('Please enter a category title');
                       return;
                     }
-                    const res = await bookService.createBook({
-                      title: newTitle.trim(),
-                      author: 'Category', // Default author since field is hidden
-                      description: '',
-                      category: (['spiritual','educational','philosophy','meditation'] as any).includes(newCategory.toLowerCase()) ? newCategory.toLowerCase() : 'spiritual',
-                      language: newLanguage as any,
-                      status: 'draft',
-                      coverImage: '',
-                      rating: 0,
-                      featured: false,
-                    } as any);
-                    if (res.success && res.data) {
-                      if (newCoverFile) {
-                        const uploadResult = await uploadService.uploadImage(newCoverFile, `books/covers/${res.data.id}`);
-                        if (uploadResult.success && uploadResult.url) {
-                          await bookService.updateBook(res.data.id, { coverImage: uploadResult.url });
+                    setIsCreatingCategory(true);
+                    try {
+                      const res = await bookService.createBook({
+                        title: newTitle.trim(),
+                        author: 'Category', // Default author since field is hidden
+                        description: '',
+                        category: (['spiritual','educational','philosophy','meditation'] as any).includes(newCategory.toLowerCase()) ? newCategory.toLowerCase() : 'spiritual',
+                        language: newLanguage as any,
+                        status: 'draft',
+                        coverImage: '',
+                        rating: 0,
+                        featured: false,
+                      } as any);
+                      if (res.success && res.data) {
+                        if (newCoverFile) {
+                          const uploadResult = await uploadService.uploadImage(newCoverFile, `books/covers/${res.data.id}`);
+                          if (uploadResult.success && uploadResult.url) {
+                            await bookService.updateBook(res.data.id, { coverImage: uploadResult.url });
+                          }
                         }
+                        setIsAddBookOpen(false);
+                        setNewTitle(""); setNewAuthor(""); setNewLanguage('hindi'); setNewCategory(""); setNewCoverFile(null);
+                        toast.success('Category created successfully');
+                      } else {
+                        toast.error(res.error || 'Failed to create category');
                       }
-                      setIsAddBookOpen(false);
-                      setNewTitle(""); setNewAuthor(""); setNewLanguage('hindi'); setNewCategory(""); setNewCoverFile(null);
-                      toast.success('Category created successfully');
-                    } else {
-                      toast.error(res.error || 'Failed to create category');
+                    } catch (error) {
+                      toast.error((error as Error).message || 'Failed to create category');
+                    } finally {
+                      setIsCreatingCategory(false);
                     }
                   }}
-                  className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                  disabled={isCreatingCategory}
+                  className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
                 >
-                  Create Category
+                  {isCreatingCategory ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Category'
+                  )}
                 </Button>
               </div>
             </div>
@@ -506,7 +896,7 @@ export function BooksManagement() {
                     setIsEditBookOpen(false);
                     setEditingBook(null);
                   } else {
-                    alert('Failed to update book: ' + result.error);
+                    toast.error('Failed to update book: ' + result.error);
                   }
                 }
               }}
@@ -656,9 +1046,11 @@ export function BooksManagement() {
     const [title, setTitle] = useState(chapter.title);
     const [content, setContent] = useState(chapter.content);
     const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const result = await bookService.updateChapter(chapter.id, { title, content });
       if (result.success) {
@@ -669,18 +1061,20 @@ export function BooksManagement() {
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
             onSave({ ...chapter, title, content, audioFile: audioFile.name, audioUrl: uploadResult.url });
           } else {
-            alert('Chapter updated but audio upload failed: ' + uploadResult.error);
+            toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
             onSave({ ...chapter, title, content, audioFile: audioFile.name });
           }
         } else {
           onSave({ ...chapter, title, content });
         }
-        alert('Chapter saved successfully');
+        toast.success('Chapter saved successfully');
       } else {
-        alert('Failed to save chapter: ' + result.error);
+        toast.error('Failed to save chapter: ' + result.error);
       }
     } catch (error) {
-      alert('Error saving chapter: ' + (error as Error).message);
+      toast.error('Error saving chapter: ' + (error as Error).message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -717,11 +1111,21 @@ export function BooksManagement() {
               </Button>
               <Button
                 onClick={handleSave}
+                disabled={isSaving}
                 size="sm"
-                className="gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                className="gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
               >
-                <Save className="h-4 w-4" />
-                Save
+                {isSaving ? (
+                  <>
+                    <Clock className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -779,6 +1183,7 @@ export function BooksManagement() {
 
   function AddChapterForm({ onSave, onCancel }: { onSave: (chapter: any) => void; onCancel: () => void }) {
     const [title, setTitle] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleSubmit = async () => {
       if (!selectedBook) return;
@@ -788,6 +1193,7 @@ export function BooksManagement() {
         toast.error('Demo mode cannot write to Firestore. Please log in with a Firebase admin account to add chapters.');
         return;
       }
+      setIsSaving(true);
       try {
         const nextOrder = chapters.length + 1;
         const res = await bookService.createChapter({
@@ -800,12 +1206,14 @@ export function BooksManagement() {
         if (res.success && res.data) {
           onSave(res.data);
           setTitle('');
-          toast.success('Chapter created');
+          toast.success('Chapter created successfully');
         } else {
           toast.error(res.error || 'Failed to create chapter. Ensure you are logged in and your Firestore rules allow writes.');
         }
       } catch (e) {
         toast.error((e as Error).message || 'Failed to create chapter');
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -832,10 +1240,17 @@ export function BooksManagement() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!title.trim()}
-            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+            disabled={!title.trim() || isSaving}
+            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
           >
-            Add Chapter
+            {isSaving ? (
+              <>
+                <Clock className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Add Chapter'
+            )}
           </Button>
         </div>
       </div>
@@ -851,6 +1266,7 @@ export function BooksManagement() {
     const [status, setStatus] = useState(book?.status || 'draft');
     const [coverFile, setCoverFile] = useState<File | null>(null);
     const [coverPreview, setCoverPreview] = useState(book?.coverImage || '');
+    const [isSaving, setIsSaving] = useState(false);
     const coverInputRef = useRef<HTMLInputElement>(null);
 
     const handleCoverChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -874,6 +1290,7 @@ export function BooksManagement() {
 
     const handleSubmit = async () => {
       if (title.trim() && author.trim()) {
+        setIsSaving(true);
         try {
           const updatedBook = {
             title: title.trim(),
@@ -891,7 +1308,8 @@ export function BooksManagement() {
             if (uploadResult.success && uploadResult.url) {
               updatedBook.coverImage = uploadResult.url;
             } else {
-              alert('Failed to upload cover image: ' + uploadResult.error);
+              toast.error('Failed to upload cover image: ' + uploadResult.error);
+              setIsSaving(false);
               return;
             }
           }
@@ -900,12 +1318,14 @@ export function BooksManagement() {
           const result = await bookService.updateBook(book.id, updatedBook);
           if (result.success) {
             onSave(updatedBook);
-            alert('Book updated successfully');
+            toast.success('Book updated successfully');
           } else {
-            alert('Failed to update book: ' + result.error);
+            toast.error('Failed to update book: ' + result.error);
           }
         } catch (error) {
-          alert('Error updating book: ' + (error as Error).message);
+          toast.error('Error updating book: ' + (error as Error).message);
+        } finally {
+          setIsSaving(false);
         }
       }
     };
@@ -1020,10 +1440,17 @@ export function BooksManagement() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!title.trim() || !author.trim()}
-            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+            disabled={!title.trim() || !author.trim() || isSaving}
+            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
           >
-            Update Category
+            {isSaving ? (
+              <>
+                <Clock className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Update Category'
+            )}
           </Button>
         </div>
       </div>

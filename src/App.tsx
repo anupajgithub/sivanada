@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { LoginPage } from './components/login-page';
 import { DashboardOverview } from './components/dashboard-overview';
@@ -55,6 +55,28 @@ export default function App() {
   // Show login page if not authenticated
   if (!isAuthenticated) {
     return <LoginPage onLogin={handleLogin} />;
+  }
+
+  // Simple role-based guard: only admin can access the admin panel UI
+  // Backend rules should also enforce this.
+  if (user && user.role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-orange-50/80 via-white to-orange-50/50">
+        <div className="max-w-md bg-white/90 shadow-xl rounded-2xl p-8 border border-orange-200/60 text-center space-y-4">
+          <h1 className="text-2xl font-bold text-gray-900">Access Restricted</h1>
+          <p className="text-gray-600">
+            Your account does not have permission to access the admin panel. Please contact an administrator if you believe this is a mistake.
+          </p>
+          <Button
+            onClick={handleLogout}
+            className="mt-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const menuItems = [

@@ -164,8 +164,10 @@ export function AudioManagement() {
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const result = await audioService.updateAudio(audio.id, {
         title,
@@ -193,6 +195,8 @@ export function AudioManagement() {
       }
     } catch (error) {
       toast.error('Error updating audio: ' + (error as Error).message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -244,10 +248,20 @@ export function AudioManagement() {
             </Button>
             <Button
               onClick={handleSave}
-              className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl"
+              disabled={isSaving}
+              className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl disabled:opacity-50"
             >
-              <Save className="h-5 w-5" />
-              Save Changes
+              {isSaving ? (
+                <>
+                  <Clock className="h-5 w-5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  Save Changes
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -658,31 +672,34 @@ export function AudioManagement() {
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('bhajan');
     const [file, setFile] = useState<File | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
       if (!(title.trim() && description.trim() && category)) {
         toast.error('Please fill in all required fields');
         return;
       }
-      audioService.createAudio({
-        title: title.trim(),
-        description: description.trim(),
-        category: category === 'bhajan' ? 'bhajan' : 'ai',
-        textContent: '',
-        audioUrl: '',
-        duration: 0,
-        status: 'draft',
-        featured: false,
-        language: 'hindi',
-        tags: []
-      } as any).then(async (res) => {
+      setIsSaving(true);
+      try {
+        const res = await audioService.createAudio({
+          title: title.trim(),
+          description: description.trim(),
+          category: category === 'bhajan' ? 'bhajan' : 'ai',
+          textContent: '',
+          audioUrl: '',
+          duration: 0,
+          status: 'draft',
+          featured: false,
+          language: 'hindi',
+          tags: []
+        } as any);
         if (res.success && res.data) {
-        if (file) {
-          const uploaded = await uploadService.uploadAudio(file, `audio/${res.data.id}`);
-          if (uploaded.success && uploaded.url) {
-            await audioService.updateAudio(res.data.id, { audioUrl: uploaded.url });
+          if (file) {
+            const uploaded = await uploadService.uploadAudio(file, `audio/${res.data.id}`);
+            if (uploaded.success && uploaded.url) {
+              await audioService.updateAudio(res.data.id, { audioUrl: uploaded.url });
+            }
           }
-        }
           onSave(res.data);
           setTitle(''); setDescription(''); setCategory('bhajan'); setFile(null);
           toast.success('Audio created successfully');
@@ -690,9 +707,11 @@ export function AudioManagement() {
         } else {
           toast.error(res.error || 'Failed to create audio');
         }
-      }).catch((error) => {
+      } catch (error) {
         toast.error((error as Error).message || 'Failed to create audio');
-      });
+      } finally {
+        setIsSaving(false);
+      }
     };
 
     return (
@@ -753,10 +772,17 @@ export function AudioManagement() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!title.trim() || !description.trim() || !category}
-            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+            disabled={!title.trim() || !description.trim() || !category || isSaving}
+            className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50"
           >
-            Add Audio
+            {isSaving ? (
+              <>
+                <Clock className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Add Audio'
+            )}
           </Button>
         </div>
       </div>

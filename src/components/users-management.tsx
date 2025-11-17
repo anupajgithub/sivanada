@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Button } from "./ui/button";
@@ -9,14 +9,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { MoreHorizontal, Search, UserPlus, Edit, Trash2, Ban, Upload, Camera } from 'lucide-react';
+import { MoreHorizontal, Search, UserPlus, Edit, Trash2, Ban, Upload, Camera, Eye, EyeOff } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { userService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
 function mapRoleToUi(role: string) {
+  // Only two roles in UI: Admin and User
   if (role === 'admin') return 'Admin';
-  if (role === 'editor') return 'Premium';
   return 'User';
 }
 
@@ -38,6 +38,7 @@ export function UsersManagement() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState("user");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const unsub = userService.subscribeToUsers({}, (list) => {
@@ -77,8 +78,6 @@ export function UsersManagement() {
   const getRoleBadge = (role: string) => {
     if (role === "Admin") {
       return <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">{role}</Badge>;
-    } else if (role === "Premium") {
-      return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">{role}</Badge>;
     } else {
       return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">{role}</Badge>;
     }
@@ -129,12 +128,14 @@ export function UsersManagement() {
   const handleUpdateUser = async (updatedUser: any) => {
     try {
       const roleMap: any = { 
+        // UI → backend roles
         'user': 'viewer',
-        'User': 'viewer', 
-        'premium': 'editor',
-        'Premium': 'editor', 
+        'User': 'viewer',
         'admin': 'admin',
-        'Admin': 'admin' 
+        'Admin': 'admin',
+        // legacy Premium/editor support (treated as viewer)
+        'premium': 'viewer',
+        'Premium': 'viewer'
       };
       const statusMap: any = {
         'active': 'active',
@@ -212,14 +213,23 @@ export function UsersManagement() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Temporary Password</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  placeholder="Set a password" 
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
-                />
+                <div className="relative">
+                  <Input 
+                    id="password" 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Set a password" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-orange-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role" className="text-sm font-semibold text-gray-700">User Role</Label>
@@ -229,7 +239,6 @@ export function UsersManagement() {
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-orange-200/40">
                     <SelectItem value="user">Standard User</SelectItem>
-                    <SelectItem value="premium">Premium User</SelectItem>
                     <SelectItem value="admin">Administrator</SelectItem>
                   </SelectContent>
                 </Select>
@@ -249,7 +258,7 @@ export function UsersManagement() {
                       return;
                     }
                     try {
-                      const roleMap: any = { user: 'viewer', premium: 'editor', admin: 'admin' };
+                      const roleMap: any = { user: 'viewer', admin: 'admin' };
                       const res = await userService.createUser({
                         name: newName.trim(),
                         email: newEmail.trim(),
@@ -384,13 +393,10 @@ export function UsersManagement() {
                     </TableCell>
                     <TableCell className="py-4 px-6 text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            className="h-10 w-10 p-0 rounded-xl hover:bg-orange-50 hover:text-orange-600"
-                          >
-                            <MoreHorizontal className="h-5 w-5" />
-                          </Button>
+                        <DropdownMenuTrigger
+                          className="h-10 w-10 p-0 rounded-xl hover:bg-orange-50 hover:text-orange-600 inline-flex items-center justify-center"
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="rounded-xl border-orange-200/40 w-48 z-50">
                           <DropdownMenuItem 

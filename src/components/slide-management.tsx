@@ -8,7 +8,7 @@ import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Presentation, Edit, Plus, Trash2, Image, Globe, Eye, Search, Filter, Upload, Star } from 'lucide-react';
+import { Presentation, Edit, Plus, Trash2, Image, Globe, Eye, Search, Filter, Upload, Star, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -58,6 +58,7 @@ function MiddleSlidesPanel() {
   }, []);
 
   const reset = () => setForm({ imageUrl: '', status: 'draft', featured: false, priority: 1, linkUrl: '' });
+  const [isSaving, setIsSaving] = useState(false);
 
   const save = async () => {
     if (!form.imageUrl) {
@@ -69,24 +70,29 @@ function MiddleSlidesPanel() {
       toast.error('Demo mode cannot write to Firestore. Please log in with a Firebase admin account to save middle slides.');
       return;
     }
-    if (editing) {
-      const res = await middleSlideService.updateMiddleSlide(editing.id, {
-        imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || ''
-      });
-      if (res.success && res.data) {
-        setItems(prev => prev.map(i => i.id === editing.id ? res.data as any : i));
-        toast.success('Updated');
-      } else toast.error(res.error || 'Failed');
-    } else {
-      const res = await middleSlideService.createMiddleSlide({
-        imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || '', createdAt: '' as any, updatedAt: '' as any
-      } as any);
-      if (res.success && res.data) {
-        setItems(prev => [res.data as any, ...prev]);
-        toast.success('Created');
-      } else toast.error(res.error || 'Failed');
+    setIsSaving(true);
+    try {
+      if (editing) {
+        const res = await middleSlideService.updateMiddleSlide(editing.id, {
+          imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || ''
+        });
+        if (res.success && res.data) {
+          setItems(prev => prev.map(i => i.id === editing.id ? res.data as any : i));
+          toast.success('Updated successfully');
+        } else toast.error(res.error || 'Failed');
+      } else {
+        const res = await middleSlideService.createMiddleSlide({
+          imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || '', createdAt: '' as any, updatedAt: '' as any
+        } as any);
+        if (res.success && res.data) {
+          setItems(prev => [res.data as any, ...prev]);
+          toast.success('Created successfully');
+        } else toast.error(res.error || 'Failed');
+      }
+      setIsOpen(false); setEditing(null); reset();
+    } finally {
+      setIsSaving(false);
     }
-    setIsOpen(false); setEditing(null); reset();
   };
 
   const pickImage = async (e: any) => {
@@ -176,7 +182,16 @@ function MiddleSlidesPanel() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setIsOpen(false); setEditing(null); reset(); }} className="border-orange-200">Cancel</Button>
-              <Button onClick={save} disabled={uploading || !form.imageUrl} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white disabled:opacity-50">{editing ? 'Update' : 'Create'}</Button>
+              <Button onClick={save} disabled={uploading || !form.imageUrl || isSaving} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white disabled:opacity-50">
+                {isSaving ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    {editing ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  editing ? 'Update' : 'Create'
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -252,6 +267,7 @@ export function SlideManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+  const [isSavingSlide, setIsSavingSlide] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   const [newSlide, setNewSlide] = useState<Partial<SlideContent>>({
@@ -423,6 +439,7 @@ export function SlideManagement() {
       return;
     }
 
+    setIsSavingSlide(true);
     try {
       const result = await slideService.createSlide({
         title: newSlide.title!,
@@ -444,6 +461,8 @@ export function SlideManagement() {
       }
     } catch (error) {
       toast.error('Error creating slide: ' + (error as Error).message);
+    } finally {
+      setIsSavingSlide(false);
     }
   };
 
@@ -454,6 +473,7 @@ export function SlideManagement() {
       return;
     }
 
+    setIsSavingSlide(true);
     try {
       const result = await slideService.updateSlide(editingSlide.id, {
         title: editingSlide.title,
@@ -477,6 +497,8 @@ export function SlideManagement() {
       }
     } catch (error) {
       toast.error('Error updating slide: ' + (error as Error).message);
+    } finally {
+      setIsSavingSlide(false);
     }
   };
 
@@ -926,9 +948,17 @@ export function SlideManagement() {
               </Button>
               <Button
                 onClick={editingSlide ? handleEditSlide : handleCreateSlide}
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+                disabled={isSavingSlide}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white disabled:opacity-50"
               >
-                {editingSlide ? 'Update Slide' : 'Create Slide'}
+                {isSavingSlide ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    {editingSlide ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  editingSlide ? 'Update Slide' : 'Create Slide'
+                )}
               </Button>
             </DialogFooter>
             </DialogContent>
