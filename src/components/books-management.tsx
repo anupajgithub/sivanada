@@ -13,7 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock } from 'lucide-react';
+import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock, Search } from 'lucide-react';
 import { bookService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -39,9 +39,23 @@ export function BooksManagement() {
   const [isEditBookOpen, setIsEditBookOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<any>(null);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const hindiBooks = books.filter(b => b.language === 'hindi');
   const englishBooks = books.filter(b => b.language === 'english');
+
+  // Filter books based on search term
+  const filteredHindiBooks = hindiBooks.filter(book => 
+    book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (book.category && book.category.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const filteredEnglishBooks = englishBooks.filter(book => 
+    book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (book.category && book.category.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   useEffect(() => {
     const unsub = bookService.subscribeToBooks({}, (list) => {
@@ -518,42 +532,64 @@ export function BooksManagement() {
       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <CardHeader className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl font-bold text-gray-900">Content Library</CardTitle>
-                <p className="text-gray-600 mt-1">Browse categories by language</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-2xl font-bold text-gray-900">Content Library</CardTitle>
+                  <p className="text-gray-600 mt-1">Browse categories by language</p>
+                </div>
+                <TabsList className="grid w-92 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
+                  <TabsTrigger 
+                    value="hindi" 
+                    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
+                  >
+                    Hindi Categories ({hindiBooks.length})
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="english"
+                    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
+                  >
+                    English Categories ({englishBooks.length})
+                  </TabsTrigger>
+                </TabsList>
               </div>
-              <TabsList className="grid w-92 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
-                <TabsTrigger 
-                  value="hindi" 
-                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
-                >
-                  Hindi Categories ({hindiBooks.length})
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="english"
-                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
-                >
-                  English Categories ({englishBooks.length})
-                </TabsTrigger>
-              </TabsList>
+              {/* Search Bar */}
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search categories by title, author, or category..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white border-orange-200 focus:border-orange-500 rounded-xl"
+                />
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-6">
             <TabsContent value="hindi" className="space-y-6 mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {hindiBooks.map((book) => (
+                {filteredHindiBooks.map((book) => (
                   <BookCard key={book.id} book={book} />
                 ))}
+                {filteredHindiBooks.length === 0 && searchTerm && (
+                  <div className="col-span-full text-center py-12 text-gray-500">
+                    No categories found matching "{searchTerm}"
+                  </div>
+                )}
               </div>
             </TabsContent>
 
             <TabsContent value="english" className="space-y-6 mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {englishBooks.map((book) => (
+                {filteredEnglishBooks.map((book) => (
                   <BookCard key={book.id} book={book} />
                 ))}
+                {filteredEnglishBooks.length === 0 && searchTerm && (
+                  <div className="col-span-full text-center py-12 text-gray-500">
+                    No categories found matching "{searchTerm}"
+                  </div>
+                )}
               </div>
             </TabsContent>
           </CardContent>
@@ -654,38 +690,24 @@ export function BooksManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
 
-    // Extract plain text from HTML
-    const extractPlainText = (html: string): string => {
-      if (!html) return '';
-      // Create a temporary div to parse HTML
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
-      // Get text content and clean it up
-      let text = tempDiv.textContent || tempDiv.innerText || '';
-      // Remove extra whitespace and newlines, but preserve single spaces
-      text = text.replace(/\s+/g, ' ').trim();
-      return text;
-    };
-
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Convert HTML content to plain text before saving
-      const plainTextContent = extractPlainText(content);
-      const result = await bookService.updateChapter(chapter.id, { title, content: plainTextContent });
+      // Save HTML content directly to preserve formatting (bold, italic, etc.)
+      const result = await bookService.updateChapter(chapter.id, { title, content });
       if (result.success) {
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `books/audio/${chapter.id}`);
           if (uploadResult.success && uploadResult.url) {
             // Update chapter with audio URL
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
-            onSave({ ...chapter, title, content: plainTextContent, audioFile: audioFile.name, audioUrl: uploadResult.url });
+            onSave({ ...chapter, title, content, audioFile: audioFile.name, audioUrl: uploadResult.url });
           } else {
             toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
-            onSave({ ...chapter, title, content: plainTextContent, audioFile: audioFile.name });
+            onSave({ ...chapter, title, content, audioFile: audioFile.name });
           }
         } else {
-          onSave({ ...chapter, title, content: plainTextContent });
+          onSave({ ...chapter, title, content });
         }
         toast.success('Chapter saved successfully');
       } else {

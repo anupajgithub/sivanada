@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -10,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Bot, Plus, Edit, ArrowLeft, Save, Upload, Trash2, Volume2, Play, Pause, Clock, FileText } from 'lucide-react';
+import { Bot, Plus, Edit, ArrowLeft, Save, Upload, Trash2, Volume2, Play, Pause, Clock, FileText, Search } from 'lucide-react';
 import { aiAudioService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -33,6 +35,13 @@ export function AIAudioManagement() {
   const [isAddChapterOpen, setIsAddChapterOpen] = useState(false);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter categories based on search term
+  const filteredCategories = categories.filter(category => 
+    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   useEffect(() => {
   const loadCategories = async () => {
@@ -443,20 +452,37 @@ export function AIAudioManagement() {
       {/* Categories Grid */}
       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">AI Audio Categories</CardTitle>
-              <p className="text-gray-600 mt-1">Browse and manage AI audio categories</p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl font-bold text-gray-900">AI Audio Categories</CardTitle>
+                <p className="text-gray-600 mt-1">Browse and manage AI audio categories</p>
+              </div>
+            </div>
+            {/* Search Bar */}
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search categories by name or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-white border-orange-200 focus:border-orange-500 rounded-xl"
+              />
+            </div>
           </div>
-        </div>
         </CardHeader>
 
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {categories.map((category) => (
+            {filteredCategories.map((category) => (
               <CategoryCard key={category.id} category={category} />
-          ))}
-        </div>
+            ))}
+            {filteredCategories.length === 0 && searchTerm && (
+              <div className="col-span-full text-center py-12 text-gray-500">
+                No categories found matching "{searchTerm}"
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -550,6 +576,81 @@ export function AIAudioManagement() {
     </Card>
   );
 }
+
+  // Rich Text Editor Component using React Quill
+  function RichTextEditor({ content, onChange }: { content: string; onChange: (content: string) => void }) {
+    const quillRef = useRef<any>(null);
+    const [editorContent, setEditorContent] = useState(() => {
+      if (!content) return '';
+      if (content.includes('<') && content.includes('>')) {
+        return content;
+      }
+      return `<p>${content}</p>`;
+    });
+
+    useEffect(() => {
+      if (content) {
+        const htmlContent = content.includes('<') && content.includes('>') 
+          ? content 
+          : `<p>${content}</p>`;
+        if (htmlContent !== editorContent) {
+          setEditorContent(htmlContent);
+        }
+      } else if (content === '' && editorContent) {
+        setEditorContent('');
+      }
+    }, [content]);
+
+    const modules = React.useMemo(() => ({
+      toolbar: {
+        container: [
+          ['bold', 'italic'],
+          [{ 'header': [3, false] }],
+        ],
+      },
+    }), []);
+
+    const formats = ['bold', 'italic', 'header'];
+
+    const handleChange = (value: string) => {
+      setEditorContent(value);
+      onChange(value);
+    };
+
+    return (
+      <div className="border border-orange-200 rounded-xl overflow-hidden bg-white">
+        <ReactQuill
+          ref={quillRef}
+          theme="snow"
+          value={editorContent}
+          onChange={handleChange}
+          modules={modules}
+          formats={formats}
+          placeholder="Start typing..."
+          className="rich-text-editor"
+        />
+        <style>{`
+          .rich-text-editor .ql-editor {
+            direction: ltr !important;
+            text-align: left !important;
+            min-height: 400px;
+          }
+          .rich-text-editor .ql-container {
+            direction: ltr !important;
+            font-family: inherit;
+          }
+          .rich-text-editor .ql-toolbar {
+            background-color: rgb(255 247 237);
+            border-bottom: 1px solid rgb(254 215 170);
+          }
+          .rich-text-editor .ql-editor.ql-blank::before {
+            direction: ltr;
+            text-align: left;
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   function ChapterEditor({ chapter, category, onSave, onDelete }: { chapter: any; category: any; onSave: (chapter: any) => void; onDelete: (chapterId: string) => void }) {
     const [title, setTitle] = useState(chapter.title);
@@ -730,17 +831,16 @@ export function AIAudioManagement() {
 
           {/* Text Content */}
           <div className="space-y-2">
-            <Label htmlFor="chapter-content" className="text-sm font-semibold text-gray-700">Chapter Content</Label>
-            <Textarea
-              id="chapter-content"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[400px]"
-              placeholder="Enter text content, script, or transcript..."
+            <Label className="text-sm font-semibold text-gray-700">Chapter Content</Label>
+            <RichTextEditor
+              content={text}
+              onChange={setText}
             />
             <div className="text-right">
-              <span className="text-sm text-gray-500">{text.length} characters</span>
-              </div>
+              <span className="text-sm text-gray-500">
+                {text.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(word => word.length > 0).length} words
+              </span>
+            </div>
           </div>
 
           {/* Audio Upload */}
@@ -848,16 +948,15 @@ export function AIAudioManagement() {
 
         <div className="space-y-4">
             <div className="space-y-2">
-            <Label htmlFor="audio-item-text" className="text-sm font-semibold text-gray-700">Text Content</Label>
-            <Textarea
-              id="audio-item-text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[200px]"
-              placeholder="Enter text content, script, or transcript..."
+            <Label className="text-sm font-semibold text-gray-700">Text Content</Label>
+            <RichTextEditor
+              content={text}
+              onChange={setText}
             />
             <div className="text-right">
-              <span className="text-sm text-gray-500">{text.length} characters</span>
+              <span className="text-sm text-gray-500">
+                {text.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(word => word.length > 0).length} words
+              </span>
             </div>
             </div>
             
@@ -1093,16 +1192,15 @@ export function AIAudioManagement() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-          <Label htmlFor="new-audio-item-text" className="text-sm font-semibold text-gray-700">Text Content</Label>
-          <Textarea
-            id="new-audio-item-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter text content or script..."
-            className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[200px]"
+          <Label className="text-sm font-semibold text-gray-700">Text Content</Label>
+          <RichTextEditor
+            content={text}
+            onChange={setText}
           />
           <div className="text-right">
-            <span className="text-sm text-gray-500">{text.length} characters</span>
+            <span className="text-sm text-gray-500">
+              {text.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(word => word.length > 0).length} words
+            </span>
       </div>
       </div>
       

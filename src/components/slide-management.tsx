@@ -427,9 +427,9 @@ export function SlideManagement() {
   };
 
   const handleCreateSlide = async () => {
-    if (!newSlide.title?.hindi || !newSlide.title?.english || 
-        !newSlide.description?.hindi || !newSlide.description?.english) {
-      toast.error('Please fill in all required fields in both languages');
+    // Validate descriptions are filled
+    if (!newSlide.description?.hindi || !newSlide.description?.english) {
+      toast.error('Please fill in quotes/descriptions in both languages');
       return;
     }
 
@@ -441,8 +441,15 @@ export function SlideManagement() {
 
     setIsSavingSlide(true);
     try {
+      // Auto-generate titles from descriptions if not provided (use first 50 chars)
+      const titleHindi = newSlide.title?.hindi || newSlide.description.hindi.substring(0, 50).trim() || 'Slide';
+      const titleEnglish = newSlide.title?.english || newSlide.description.english.substring(0, 50).trim() || 'Slide';
+
       const result = await slideService.createSlide({
-        title: newSlide.title!,
+        title: {
+          hindi: titleHindi,
+          english: titleEnglish
+        },
         description: newSlide.description!,
         imageUrl: newSlide.imageUrl || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
         status: newSlide.status as SlideContent['status'],
@@ -467,16 +474,22 @@ export function SlideManagement() {
   };
 
   const handleEditSlide = async () => {
-    if (!editingSlide || !editingSlide.title.hindi || !editingSlide.title.english || 
-        !editingSlide.description.hindi || !editingSlide.description.english) {
-      toast.error('Please fill in all required fields in both languages');
+    if (!editingSlide || !editingSlide.description.hindi || !editingSlide.description.english) {
+      toast.error('Please fill in quotes/descriptions in both languages');
       return;
     }
 
     setIsSavingSlide(true);
     try {
+      // Auto-generate titles from descriptions if not provided (use first 50 chars)
+      const titleHindi = editingSlide.title?.hindi || editingSlide.description.hindi.substring(0, 50).trim() || 'Slide';
+      const titleEnglish = editingSlide.title?.english || editingSlide.description.english.substring(0, 50).trim() || 'Slide';
+
       const result = await slideService.updateSlide(editingSlide.id, {
-        title: editingSlide.title,
+        title: {
+          hindi: titleHindi,
+          english: titleEnglish
+        },
         description: editingSlide.description,
         imageUrl: editingSlide.imageUrl,
         status: editingSlide.status,

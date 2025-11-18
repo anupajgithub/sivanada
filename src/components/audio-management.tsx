@@ -11,7 +11,7 @@ import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Volume2, Plus, Edit, Play, Pause, ArrowLeft, Save, Upload, FileText, Clock, Trash2, Music, Bot } from 'lucide-react';
+import { Volume2, Plus, Edit, Play, Pause, ArrowLeft, Save, Upload, FileText, Clock, Trash2, Music, Bot, Search } from 'lucide-react';
 import { audioService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -95,6 +95,7 @@ export function AudioManagement() {
   const [selectedAudio, setSelectedAudio] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [audioList, setAudioList] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const unsub = audioService.subscribeToAudioContent({}, (list) => {
@@ -112,6 +113,12 @@ export function AudioManagement() {
   }, []);
 
   const currentAudio = audioList.filter(audio => audio.category === activeTab);
+  
+  // Filter audio based on search term
+  const filteredAudio = currentAudio.filter(audio => 
+    audio.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (audio.description && audio.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const getStatusBadge = (status: string) => {
     if (status === "Published") {
@@ -437,16 +444,17 @@ export function AudioManagement() {
       <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <CardHeader className="bg-gradient-to-r from-orange-50/50 to-orange-100/30 border-b border-orange-200/40 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl font-bold text-gray-900">Audio Library</CardTitle>
-                <p className="text-gray-600 mt-1">Browse audio content by category</p>
-              </div>
-              <TabsList className="grid w-64 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
-                <TabsTrigger 
-                  value="bhajan" 
-                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
-                >
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-2xl font-bold text-gray-900">Audio Library</CardTitle>
+                  <p className="text-gray-600 mt-1">Browse audio content by category</p>
+                </div>
+                <TabsList className="grid w-64 grid-cols-2 rounded-xl bg-orange-100/50 p-1">
+                  <TabsTrigger 
+                    value="bhajan" 
+                    className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm font-semibold"
+                  >
                   <Music className="h-4 w-4 mr-2" />
                   Bhajan ({audioList.filter(a => a.category === 'bhajan').length})
                 </TabsTrigger>
@@ -458,23 +466,44 @@ export function AudioManagement() {
                   Talks ({audioList.filter(a => a.category === 'talks').length})
                 </TabsTrigger>
               </TabsList>
+              </div>
+              {/* Search Bar */}
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search audio by title or description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white border-orange-200 focus:border-orange-500 rounded-xl"
+                />
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-6">
             <TabsContent value="bhajan" className="space-y-6 mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {audioList.filter(audio => audio.category === 'bhajan').map((audio) => (
+                {filteredAudio.filter(audio => audio.category === 'bhajan').map((audio) => (
                   <AudioCard key={audio.id} audio={audio} onEdit={handleEditAudio} />
                 ))}
+                {filteredAudio.filter(audio => audio.category === 'bhajan').length === 0 && searchTerm && (
+                  <div className="col-span-full text-center py-12 text-gray-500">
+                    No audio found matching "{searchTerm}"
+                  </div>
+                )}
               </div>
             </TabsContent>
 
             <TabsContent value="talks" className="space-y-6 mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {audioList.filter(audio => audio.category === 'talks').map((audio) => (
+                {filteredAudio.filter(audio => audio.category === 'talks').map((audio) => (
                   <AudioCard key={audio.id} audio={audio} onEdit={handleEditAudio} />
                 ))}
+                {filteredAudio.filter(audio => audio.category === 'talks').length === 0 && searchTerm && (
+                  <div className="col-span-full text-center py-12 text-gray-500">
+                    No audio found matching "{searchTerm}"
+                  </div>
+                )}
               </div>
             </TabsContent>
           </CardContent>
