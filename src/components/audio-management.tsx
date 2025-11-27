@@ -264,9 +264,21 @@ export function AudioManagement() {
         textAlignment = 'justify';
       }
       
+      // Clean up HTML content to remove unwanted line breaks after bold tags
+      let cleanedDescription = description;
+      // Remove line breaks and closing paragraph tags immediately after closing bold/strong tags
+      // This fixes the issue where "Q." appears on a new line after bold text
+      cleanedDescription = cleanedDescription
+        .replace(/<\/strong>\s*<\/p>\s*<p>/gi, '</strong>') // Remove paragraph break after </strong>
+        .replace(/<\/b>\s*<\/p>\s*<p>/gi, '</b>') // Remove paragraph break after </b>
+        .replace(/<\/strong>\s*<br\s*\/?>\s*/gi, '</strong>') // Remove <br> after </strong>
+        .replace(/<\/b>\s*<br\s*\/?>\s*/gi, '</b>') // Remove <br> after </b>
+        .replace(/<\/strong>\s*\n\s*/gi, '</strong>') // Remove newlines after </strong>
+        .replace(/<\/b>\s*\n\s*/gi, '</b>'); // Remove newlines after </b>
+      
       const result = await audioService.updateAudio(audio.id, {
         title,
-        description,
+        description: cleanedDescription,
         textAlignment
       });
 
@@ -281,7 +293,7 @@ export function AudioManagement() {
         const updatedAudio = {
           ...audio,
           title,
-          description,
+          description: cleanedDescription,
           textAlignment: textAlignment,
           audioFile: audioFile ? audioFile.name : audio.audioFile
         };

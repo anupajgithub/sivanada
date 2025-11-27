@@ -704,21 +704,33 @@ export function BooksManagement() {
         textAlignment = 'justify';
       }
       
+      // Clean up HTML content to remove unwanted line breaks after bold tags
+      let cleanedContent = content;
+      // Remove line breaks and closing paragraph tags immediately after closing bold/strong tags
+      // This fixes the issue where "Q." appears on a new line after bold text
+      cleanedContent = cleanedContent
+        .replace(/<\/strong>\s*<\/p>\s*<p>/gi, '</strong>') // Remove paragraph break after </strong>
+        .replace(/<\/b>\s*<\/p>\s*<p>/gi, '</b>') // Remove paragraph break after </b>
+        .replace(/<\/strong>\s*<br\s*\/?>\s*/gi, '</strong>') // Remove <br> after </strong>
+        .replace(/<\/b>\s*<br\s*\/?>\s*/gi, '</b>') // Remove <br> after </b>
+        .replace(/<\/strong>\s*\n\s*/gi, '</strong>') // Remove newlines after </strong>
+        .replace(/<\/b>\s*\n\s*/gi, '</b>'); // Remove newlines after </b>
+      
       // Save HTML content directly to preserve formatting (bold, italic, alignment, etc.)
-      const result = await bookService.updateChapter(chapter.id, { title, content, textAlignment });
+      const result = await bookService.updateChapter(chapter.id, { title, content: cleanedContent, textAlignment });
       if (result.success) {
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `books/audio/${chapter.id}`);
           if (uploadResult.success && uploadResult.url) {
             // Update chapter with audio URL
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
-            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name, audioUrl: uploadResult.url });
+            onSave({ ...chapter, title, content: cleanedContent, textAlignment, audioFile: audioFile.name, audioUrl: uploadResult.url });
           } else {
             toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
-            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name });
+            onSave({ ...chapter, title, content: cleanedContent, textAlignment, audioFile: audioFile.name });
           }
         } else {
-          onSave({ ...chapter, title, content, textAlignment });
+          onSave({ ...chapter, title, content: cleanedContent, textAlignment });
         }
         toast.success('Chapter saved successfully');
       } else {

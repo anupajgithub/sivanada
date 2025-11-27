@@ -687,6 +687,18 @@ export function AIAudioManagement() {
     const handleSave = async () => {
       setIsSaving(true);
       try {
+        // Clean up HTML content to remove unwanted line breaks after bold tags
+        let cleanedText = text;
+        // Remove line breaks and closing paragraph tags immediately after closing bold/strong tags
+        // This fixes the issue where "Q." appears on a new line after bold text
+        cleanedText = cleanedText
+          .replace(/<\/strong>\s*<\/p>\s*<p>/gi, '</strong>') // Remove paragraph break after </strong>
+          .replace(/<\/b>\s*<\/p>\s*<p>/gi, '</b>') // Remove paragraph break after </b>
+          .replace(/<\/strong>\s*<br\s*\/?>\s*/gi, '</strong>') // Remove <br> after </strong>
+          .replace(/<\/b>\s*<br\s*\/?>\s*/gi, '</b>') // Remove <br> after </b>
+          .replace(/<\/strong>\s*\n\s*/gi, '</strong>') // Remove newlines after </strong>
+          .replace(/<\/b>\s*\n\s*/gi, '</b>'); // Remove newlines after </b>
+
         // Update chapter title
         const chapterResult = await aiAudioService.updateChapter(chapter.id, { title, description: '' });
         if (!chapterResult.success) {
@@ -719,7 +731,7 @@ export function AIAudioManagement() {
               // Update existing audio item
               const updateResult = await aiAudioService.updateAudioItem(audioItemId, {
                 title: 'Audio Item',
-                text,
+                text: cleanedText,
                 status: 'Draft',
                 audioUrl: finalAudioUrl
               });
@@ -735,7 +747,7 @@ export function AIAudioManagement() {
                     chapterId: chapter.id,
                     categoryId: category.id,
                 title: 'Audio Item',
-                text,
+                text: cleanedText,
                 status: 'Draft',
                 order: 1
               });
@@ -898,6 +910,18 @@ export function AIAudioManagement() {
           textAlignment = 'justify';
         }
         
+        // Clean up HTML content to remove unwanted line breaks after bold tags
+        let cleanedText = text;
+        // Remove line breaks and closing paragraph tags immediately after closing bold/strong tags
+        // This fixes the issue where "Q." appears on a new line after bold text
+        cleanedText = cleanedText
+          .replace(/<\/strong>\s*<\/p>\s*<p>/gi, '</strong>') // Remove paragraph break after </strong>
+          .replace(/<\/b>\s*<\/p>\s*<p>/gi, '</b>') // Remove paragraph break after </b>
+          .replace(/<\/strong>\s*<br\s*\/?>\s*/gi, '</strong>') // Remove <br> after </strong>
+          .replace(/<\/b>\s*<br\s*\/?>\s*/gi, '</b>') // Remove <br> after </b>
+          .replace(/<\/strong>\s*\n\s*/gi, '</strong>') // Remove newlines after </strong>
+          .replace(/<\/b>\s*\n\s*/gi, '</b>'); // Remove newlines after </b>
+        
         let audioUrl = audioItem.audioUrl;
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `ai-audio/${audioItem.id}`);
@@ -912,7 +936,7 @@ export function AIAudioManagement() {
 
         const result = await aiAudioService.updateAudioItem(audioItem.id, {
           title: audioItem.title || 'Audio Item', // Keep existing title
-          text,
+          text: cleanedText,
           textAlignment,
           status: audioItem.status || 'Draft', // Keep existing status
           audioUrl: audioUrl
@@ -921,7 +945,7 @@ export function AIAudioManagement() {
         if (result.success) {
           const updatedItem = {
             ...audioItem,
-      text,
+      text: cleanedText,
             textAlignment,
             audioFile: audioFile ? audioFile.name : audioItem.audioFile,
             audioUrl: audioUrl
