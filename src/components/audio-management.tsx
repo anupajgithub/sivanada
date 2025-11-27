@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -164,6 +166,82 @@ export function AudioManagement() {
     setSelectedAudio(null);
   };
 
+  // Rich Text Editor Component using React Quill
+  function RichTextEditor({ content, onChange }: { content: string; onChange: (content: string) => void }) {
+    const quillRef = useRef<any>(null);
+    const [editorContent, setEditorContent] = useState(() => {
+      if (!content) return '';
+      if (content.includes('<') && content.includes('>')) {
+        return content;
+      }
+      return `<p>${content}</p>`;
+    });
+
+    useEffect(() => {
+      if (content) {
+        const htmlContent = content.includes('<') && content.includes('>') 
+          ? content 
+          : `<p>${content}</p>`;
+        if (htmlContent !== editorContent) {
+          setEditorContent(htmlContent);
+        }
+      } else if (content === '' && editorContent) {
+        setEditorContent('');
+      }
+    }, [content]);
+
+    const modules = React.useMemo(() => ({
+      toolbar: {
+        container: [
+          ['bold', 'italic'],
+          [{ 'header': [3, false] }],
+          [{ 'align': [] }],
+        ],
+      },
+    }), []);
+
+    const formats = ['bold', 'italic', 'header', 'align'];
+
+    const handleChange = (value: string) => {
+      setEditorContent(value);
+      onChange(value);
+    };
+
+    return (
+      <div className="border border-orange-200 rounded-xl overflow-hidden bg-white">
+        <ReactQuill
+          ref={quillRef}
+          theme="snow"
+          value={editorContent}
+          onChange={handleChange}
+          modules={modules}
+          formats={formats}
+          placeholder="Start typing..."
+          className="rich-text-editor"
+        />
+        <style>{`
+          .rich-text-editor .ql-editor {
+            direction: ltr !important;
+            text-align: left !important;
+            min-height: 200px;
+          }
+          .rich-text-editor .ql-container {
+            direction: ltr !important;
+            font-family: inherit;
+          }
+          .rich-text-editor .ql-toolbar {
+            background-color: rgb(255 247 237);
+            border-bottom: 1px solid rgb(254 215 170);
+          }
+          .rich-text-editor .ql-editor.ql-blank::before {
+            direction: ltr;
+            text-align: left;
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   // Audio Editor Component
   function AudioEditor({ audio, onSave, onDelete }: { audio: any; onSave: (audio: any) => void; onDelete: (audioId: string) => void }) {
     const [title, setTitle] = useState(audio.title);
@@ -176,9 +254,20 @@ export function AudioManagement() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Extract text alignment from description if it contains HTML with alignment classes
+      let textAlignment: 'left' | 'center' | 'right' | 'justify' = 'left';
+      if (description.includes('ql-align-center') || description.includes('text-align: center')) {
+        textAlignment = 'center';
+      } else if (description.includes('ql-align-right') || description.includes('text-align: right')) {
+        textAlignment = 'right';
+      } else if (description.includes('ql-align-justify') || description.includes('text-align: justify')) {
+        textAlignment = 'justify';
+      }
+      
       const result = await audioService.updateAudio(audio.id, {
         title,
-        description
+        description,
+        textAlignment
       });
 
       if (result.success) {
@@ -193,6 +282,7 @@ export function AudioManagement() {
           ...audio,
           title,
           description,
+          textAlignment: textAlignment,
           audioFile: audioFile ? audioFile.name : audio.audioFile
         };
         onSave(updatedAudio);
@@ -372,15 +462,13 @@ export function AudioManagement() {
             <CardContent className="p-6">
               <div className="space-y-4">
                 <Label className="text-sm font-semibold text-gray-700">Audio Description</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20 min-h-[400px]"
-                  placeholder="Enter detailed description about the audio content..."
+                <RichTextEditor
+                  content={description}
+                  onChange={setDescription}
                 />
                 <div className="text-right">
                   <span className="text-sm text-gray-500">
-                    {description.length} characters
+                    {description.replace(/<[^>]*>/g, '').trim().length} characters
                   </span>
                 </div>
               </div>
@@ -710,9 +798,20 @@ export function AudioManagement() {
       }
       setIsSaving(true);
       try {
+        // Extract text alignment from description if it contains HTML with alignment classes
+        let textAlignment: 'left' | 'center' | 'right' | 'justify' = 'left';
+        if (description.includes('ql-align-center') || description.includes('text-align: center')) {
+          textAlignment = 'center';
+        } else if (description.includes('ql-align-right') || description.includes('text-align: right')) {
+          textAlignment = 'right';
+        } else if (description.includes('ql-align-justify') || description.includes('text-align: justify')) {
+          textAlignment = 'justify';
+        }
+        
         const res = await audioService.createAudio({
           title: title.trim(),
           description: description.trim(),
+          textAlignment,
           category: category === 'bhajan' ? 'bhajan' : 'ai',
           textContent: '',
           audioUrl: '',
@@ -758,12 +857,9 @@ export function AudioManagement() {
         
         <div className="space-y-2">
           <Label htmlFor="new-audio-description" className="text-sm font-semibold text-gray-700">Text Content</Label>
-          <Textarea
-            id="new-audio-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter text content or script..."
-            className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
+          <RichTextEditor
+            content={description}
+            onChange={setDescription}
           />
         </div>
 

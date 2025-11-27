@@ -135,7 +135,7 @@ class SlideService {
   }
 
   // Create new slide
-  async createSlide(slideData: Omit<SlideContent, 'id' | 'createdAt' | 'updatedAt' | 'viewCount'>): Promise<ApiResponse<SlideContent>> {
+  async createSlide(slideData: Omit<SlideContent, 'id' | 'createdAt' | 'updatedAt' | 'viewCount' | 'createdBy'>): Promise<ApiResponse<SlideContent>> {
     try {
       const now = new Date().toISOString();
       const uid = (await import('../lib/firebase')).auth.currentUser?.uid || null;

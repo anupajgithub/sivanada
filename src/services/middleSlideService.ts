@@ -73,7 +73,15 @@ class MiddleSlideService {
       const slide = await getDoc(ref);
       const data = slide.data() as any;
       if (data?.imageUrl) {
-        try { await uploadService.deleteImage(data.imageUrl); } catch {}
+        // Handle both old format (string) and new format (object with hindi/english)
+        if (typeof data.imageUrl === 'string') {
+          try { await uploadService.deleteImage(data.imageUrl); } catch {}
+        } else if (data.imageUrl.hindi) {
+          try { await uploadService.deleteImage(data.imageUrl.hindi); } catch {}
+        }
+        if (data.imageUrl.english) {
+          try { await uploadService.deleteImage(data.imageUrl.english); } catch {}
+        }
       }
       await deleteDoc(ref);
       return { success: true, message: 'Middle slide deleted' };

@@ -13,7 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock, Search } from 'lucide-react';
+import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock, Search, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { bookService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -172,11 +172,12 @@ export function BooksManagement() {
         container: [
           ['bold', 'italic'],
           [{ 'header': [3, false] }],
+          [{ 'align': [] }],
         ],
       },
     }), []);
 
-    const formats = ['bold', 'italic', 'header'];
+    const formats = ['bold', 'italic', 'header', 'align'];
 
     const handleChange = (value: string) => {
       setEditorContent(value);
@@ -693,21 +694,31 @@ export function BooksManagement() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Save HTML content directly to preserve formatting (bold, italic, etc.)
-      const result = await bookService.updateChapter(chapter.id, { title, content });
+      // Extract text alignment from HTML content (Quill stores it in class names)
+      let textAlignment: 'left' | 'center' | 'right' | 'justify' = 'left';
+      if (content.includes('ql-align-center')) {
+        textAlignment = 'center';
+      } else if (content.includes('ql-align-right')) {
+        textAlignment = 'right';
+      } else if (content.includes('ql-align-justify')) {
+        textAlignment = 'justify';
+      }
+      
+      // Save HTML content directly to preserve formatting (bold, italic, alignment, etc.)
+      const result = await bookService.updateChapter(chapter.id, { title, content, textAlignment });
       if (result.success) {
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `books/audio/${chapter.id}`);
           if (uploadResult.success && uploadResult.url) {
             // Update chapter with audio URL
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
-            onSave({ ...chapter, title, content, audioFile: audioFile.name, audioUrl: uploadResult.url });
+            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name, audioUrl: uploadResult.url });
           } else {
             toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
-            onSave({ ...chapter, title, content, audioFile: audioFile.name });
+            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name });
           }
         } else {
-          onSave({ ...chapter, title, content });
+          onSave({ ...chapter, title, content, textAlignment });
         }
         toast.success('Chapter saved successfully');
       } else {

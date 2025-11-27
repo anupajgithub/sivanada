@@ -40,6 +40,7 @@ export interface Chapter {
   audioUrl?: string;
   duration?: number;
   status: 'published' | 'draft';
+  textAlignment?: 'left' | 'center' | 'right' | 'justify';
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +59,7 @@ export interface AudioContent {
   playCount: number;
   language: 'hindi' | 'english';
   tags: string[];
+  textAlignment?: 'left' | 'center' | 'right' | 'justify';
   createdAt: string;
   updatedAt: string;
 }
@@ -115,6 +117,10 @@ export interface SlideContent {
     hindi: string;
     english: string;
   };
+  bookName: {
+    hindi: string;
+    english: string;
+  };
   imageUrl: string;
   status: 'draft' | 'published' | 'archived';
   featured: boolean;
@@ -129,7 +135,18 @@ export interface SlideContent {
 // Middle slides: image-only carousel for "middle" section
 export interface MiddleSlide {
   id: string;
-  imageUrl: string;
+  title: {
+    hindi: string;
+    english: string;
+  };
+  description: {
+    hindi: string;
+    english: string;
+  };
+  imageUrl: {
+    hindi: string;
+    english: string;
+  };
   status: 'draft' | 'published' | 'archived';
   featured: boolean;
   priority: number; // lower number shows first

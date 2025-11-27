@@ -24,6 +24,10 @@ interface SlideContent {
     hindi: string;
     english: string;
   };
+  bookName: {
+    hindi: string;
+    english: string;
+  };
   imageUrl: string;
   status: 'draft' | 'published' | 'archived';
   featured: boolean;
@@ -34,37 +38,102 @@ interface SlideContent {
   viewCount: number;
 }
 
+// Helper function for status colors
+const getStatusColorForMiddle = (status: 'draft' | 'published' | 'archived') => {
+  switch (status) {
+    case 'published': return 'bg-green-100 text-green-800 border-green-200';
+    case 'draft': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'archived': return 'bg-gray-100 text-gray-800 border-gray-200';
+    default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+};
+
 // Middle Slides (images-only) panel
 function MiddleSlidesPanel() {
-  type MS = { id: string; imageUrl: string; status: 'draft'|'published'|'archived'; featured: boolean; priority: number; linkUrl?: string; createdAt: string; updatedAt: string };
+  type MS = { 
+    id: string; 
+    title: { hindi: string; english: string };
+    description: { hindi: string; english: string };
+    imageUrl: { hindi: string; english: string };
+    status: 'draft'|'published'|'archived'; 
+    featured: boolean; 
+    priority: number; 
+    linkUrl?: string; 
+    createdAt: string; 
+    updatedAt: string;
+  };
   const [items, setItems] = useState<MS[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<MS | null>(null);
-  const [form, setForm] = useState<Partial<MS>>({ imageUrl: '', status: 'draft', featured: false, priority: 1, linkUrl: '' });
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [form, setForm] = useState<Partial<MS>>({ 
+    title: { hindi: '', english: '' },
+    description: { hindi: '', english: '' },
+    imageUrl: { hindi: '', english: '' }, 
+    status: 'draft', 
+    featured: false, 
+    priority: 1, 
+    linkUrl: '' 
+  });
+  const [uploading, setUploading] = useState({ hindi: false, english: false });
+  const hindiFileInputRef = useRef<HTMLInputElement | null>(null);
+  const englishFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     (async () => {
       const res = await middleSlideService.getMiddleSlides({ sortBy: 'priority', sortOrder: 'asc', limit: 100 } as any);
       if (res.success) {
-        setItems(res.data);
+        // Convert old format to new format if needed
+        const convertedItems = res.data.map((item: any) => {
+          if (typeof item.imageUrl === 'string') {
+            // Old format - convert to new format
+            return {
+              ...item,
+              title: item.title || { hindi: '', english: '' },
+              description: item.description || { hindi: '', english: '' },
+              imageUrl: {
+                hindi: item.imageUrl,
+                english: item.imageUrl
+              }
+            };
+          }
+          return item;
+        });
+        setItems(convertedItems);
       } else {
-        toast.error(res.error || 'Failed to load middle slides');
+        toast.error('Failed to load middle slides');
       }
       setLoading(false);
     })();
   }, []);
 
-  const reset = () => setForm({ imageUrl: '', status: 'draft', featured: false, priority: 1, linkUrl: '' });
+  const reset = () => setForm({ 
+    title: { hindi: '', english: '' },
+    description: { hindi: '', english: '' },
+    imageUrl: { hindi: '', english: '' }, 
+    status: 'draft', 
+    featured: false, 
+    priority: 1, 
+    linkUrl: '' 
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const save = async () => {
-    if (!form.imageUrl) {
-      toast.error('Please upload/select an image');
+    if (!form.imageUrl?.hindi || !form.imageUrl?.english) {
+      toast.error('Please upload both Hindi and English images');
       return;
     }
+    if (!form.description?.hindi || !form.description?.english) {
+      toast.error('Please fill in descriptions in both languages');
+      return;
+    }
+    
+    // Check if we're at the limit (5 slides max)
+    if (!editing && items.length >= 5) {
+      toast.error('Maximum 5 middle slides allowed. Please delete one before adding a new one.');
+      return;
+    }
+    
     // Block in demo mode — Firestore writes are not allowed by rules
     if (typeof window !== 'undefined' && localStorage.getItem('demoUser')) {
       toast.error('Demo mode cannot write to Firestore. Please log in with a Firebase admin account to save middle slides.');
@@ -72,9 +141,19 @@ function MiddleSlidesPanel() {
     }
     setIsSaving(true);
     try {
+      // Auto-generate titles from descriptions if not provided
+      const titleHindi = form.title?.hindi || form.description?.hindi?.substring(0, 50).trim() || 'Slide';
+      const titleEnglish = form.title?.english || form.description?.english?.substring(0, 50).trim() || 'Slide';
+      
       if (editing) {
         const res = await middleSlideService.updateMiddleSlide(editing.id, {
-          imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || ''
+          title: { hindi: titleHindi, english: titleEnglish },
+          description: form.description!,
+          imageUrl: form.imageUrl!, 
+          status: form.status as any, 
+          featured: !!form.featured, 
+          priority: form.priority || 1, 
+          linkUrl: form.linkUrl || ''
         });
         if (res.success && res.data) {
           setItems(prev => prev.map(i => i.id === editing.id ? res.data as any : i));
@@ -82,7 +161,15 @@ function MiddleSlidesPanel() {
         } else toast.error(res.error || 'Failed');
       } else {
         const res = await middleSlideService.createMiddleSlide({
-          imageUrl: form.imageUrl!, status: form.status as any, featured: !!form.featured, priority: form.priority || 1, linkUrl: form.linkUrl || '', createdAt: '' as any, updatedAt: '' as any
+          title: { hindi: titleHindi, english: titleEnglish },
+          description: form.description!,
+          imageUrl: form.imageUrl!, 
+          status: form.status as any, 
+          featured: !!form.featured, 
+          priority: form.priority || 1, 
+          linkUrl: form.linkUrl || '', 
+          createdAt: '' as any, 
+          updatedAt: '' as any
         } as any);
         if (res.success && res.data) {
           setItems(prev => [res.data as any, ...prev]);
@@ -95,7 +182,7 @@ function MiddleSlidesPanel() {
     }
   };
 
-  const pickImage = async (e: any) => {
+  const pickImage = async (e: any, language: 'hindi' | 'english') => {
     const file = e.target?.files?.[0];
     if (!file) return;
     // reset input so choosing the same file again still triggers onChange
@@ -104,24 +191,41 @@ function MiddleSlidesPanel() {
     // instant local preview
     try {
       const localUrl = URL.createObjectURL(file);
-      setForm(f => ({ ...f, imageUrl: localUrl }));
+      setForm(f => ({ 
+        ...f, 
+        imageUrl: { 
+          ...f.imageUrl, 
+          [language]: localUrl 
+        } as any
+      }));
     } catch {}
 
-    setUploading(true);
+    setUploading(prev => ({ ...prev, [language]: true }));
     const res = await middleSlideService.uploadMiddleSlideImage(file);
-    setUploading(false);
+    setUploading(prev => ({ ...prev, [language]: false }));
     if (res.success && res.data) {
-      setForm(f => ({ ...f, imageUrl: res.data as string }));
-      toast.success('Image uploaded');
+      setForm(f => ({ 
+        ...f, 
+        imageUrl: { 
+          ...f.imageUrl, 
+          [language]: res.data as string 
+        } as any
+      }));
+      toast.success(`${language === 'hindi' ? 'Hindi' : 'English'} image uploaded`);
     } else {
       toast.error(res.error || 'Upload failed');
     }
   };
 
   const del = async (id: string) => {
-    if (!window.confirm('Delete this image?')) return;
+    if (!window.confirm('Delete this slide?')) return;
     const res = await middleSlideService.deleteMiddleSlide(id);
-    if (res.success) setItems(prev => prev.filter(i => i.id !== id)); else toast.error(res.error || 'Failed');
+    if (res.success) {
+      setItems(prev => prev.filter(i => i.id !== id));
+      toast.success('Slide deleted successfully');
+    } else {
+      toast.error(res.error || 'Failed');
+    }
   };
 
   const toggle = async (id: string) => {
@@ -132,57 +236,178 @@ function MiddleSlidesPanel() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">Middle Slides (Images Only)</h2>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Middle Slides</h2>
+          <p className="text-sm text-gray-600 mt-1">Maximum 5 slides (10 images: 5 Hindi + 5 English)</p>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-              <Plus className="h-4 w-4 mr-2" /> Add Image
+            <Button 
+              className="bg-gradient-to-r from-orange-500 to-orange-600 text-white"
+              disabled={!editing && items.length >= 5}
+            >
+              <Plus className="h-4 w-4 mr-2" /> Add Slide
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editing ? 'Edit Image' : 'Add Image'}</DialogTitle>
+              <DialogTitle>{editing ? 'Edit Middle Slide' : 'Add Middle Slide'}</DialogTitle>
+              <DialogDescription>
+                {editing ? 'Update slide content' : 'Add a new middle slide with Hindi and English images'}
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Upload Image</Label>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="border-orange-200 text-orange-600 hover:bg-orange-50">
-                    <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Choose Image'}
-                  </Button>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={pickImage} className="hidden" />
+            
+            <Tabs defaultValue="content" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="content">Content</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="content" className="space-y-4">
+                {/* English Content */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-blue-500" />
+                    <h4 className="font-medium text-gray-900">English Content</h4>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="description-en">Description (English) *</Label>
+                    <Textarea
+                      id="description-en"
+                      value={form.description?.english || ''}
+                      onChange={(e) => setForm(f => ({
+                        ...f,
+                        description: { ...f.description!, english: e.target.value }
+                      }))}
+                      placeholder="Enter English description"
+                      className="bg-white border-orange-200 min-h-[80px]"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>English Image *</Label>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        disabled={uploading.english} 
+                        onClick={() => englishFileInputRef.current?.click()} 
+                        className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                      >
+                        <Upload className="h-4 w-4 mr-2" /> 
+                        {uploading.english ? 'Uploading...' : 'Choose English Image'}
+                      </Button>
+                      <input 
+                        ref={englishFileInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => pickImage(e, 'english')} 
+                        className="hidden" 
+                      />
+                    </div>
+                    {form.imageUrl?.english ? (
+                      <img src={form.imageUrl.english} alt="English preview" className="w-full h-40 object-cover rounded border" />
+                    ) : (
+                      <div className="w-full h-40 bg-gray-50 border rounded flex items-center justify-center text-gray-400">No English image</div>
+                    )}
+                  </div>
                 </div>
-                {form.imageUrl ? (
-                  <img src={form.imageUrl} alt="preview" className="w-full h-40 object-cover rounded border" />
-                ) : (
-                  <div className="w-full h-40 bg-gray-50 border rounded flex items-center justify-center text-gray-400">No image</div>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+
+                {/* Hindi Content */}
+                <div className="space-y-3 pt-4 border-t border-orange-100">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-orange-500" />
+                    <h4 className="font-medium text-gray-900">Hindi Content (हिंदी सामग्री)</h4>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="description-hi">Description (Hindi) * / विवरण (हिंदी) *</Label>
+                    <Textarea
+                      id="description-hi"
+                      value={form.description?.hindi || ''}
+                      onChange={(e) => setForm(f => ({
+                        ...f,
+                        description: { ...f.description!, hindi: e.target.value }
+                      }))}
+                      placeholder="हिंदी विवरण दर्ज करें"
+                      className="bg-white border-orange-200 min-h-[80px]"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Hindi Image * / हिंदी छवि *</Label>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        disabled={uploading.hindi} 
+                        onClick={() => hindiFileInputRef.current?.click()} 
+                        className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                      >
+                        <Upload className="h-4 w-4 mr-2" /> 
+                        {uploading.hindi ? 'Uploading...' : 'Choose Hindi Image'}
+                      </Button>
+                      <input 
+                        ref={hindiFileInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => pickImage(e, 'hindi')} 
+                        className="hidden" 
+                      />
+                    </div>
+                    {form.imageUrl?.hindi ? (
+                      <img src={form.imageUrl.hindi} alt="Hindi preview" className="w-full h-40 object-cover rounded border" />
+                    ) : (
+                      <div className="w-full h-40 bg-gray-50 border rounded flex items-center justify-center text-gray-400">No Hindi image</div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="settings" className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Status</Label>
+                    <Select value={(form.status as any) || 'draft'} onValueChange={(v) => setForm(f => ({ ...f, status: v as any }))}>
+                      <SelectTrigger className="bg-white border-orange-200"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="published">Published</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Priority</Label>
+                    <Input type="number" min={1} max={50} value={form.priority || 1} onChange={(e) => setForm(f => ({ ...f, priority: parseInt(e.target.value) || 1 }))} />
+                  </div>
+                </div>
                 <div>
-                  <Label>Status</Label>
-                  <Select value={(form.status as any) || 'draft'} onValueChange={(v) => setForm(f => ({ ...f, status: v as any }))}>
-                    <SelectTrigger className="bg-white border-orange-200"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="published">Published</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Link (optional)</Label>
+                  <Input value={form.linkUrl || ''} onChange={(e) => setForm(f => ({ ...f, linkUrl: e.target.value }))} placeholder="https://..." />
                 </div>
-                <div>
-                  <Label>Priority</Label>
-                  <Input type="number" min={1} max={50} value={form.priority || 1} onChange={(e) => setForm(f => ({ ...f, priority: parseInt(e.target.value) || 1 }))} />
+                <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div>
+                    <Label htmlFor="featured" className="text-sm font-medium">Featured Slide</Label>
+                    <p className="text-xs text-gray-600">Mark this slide as featured for priority display</p>
+                  </div>
+                  <Switch
+                    id="featured"
+                    checked={form.featured || false}
+                    onCheckedChange={(checked) => setForm(f => ({ ...f, featured: checked }))}
+                  />
                 </div>
-              </div>
-              <div>
-                <Label>Link (optional)</Label>
-                <Input value={form.linkUrl || ''} onChange={(e) => setForm(f => ({ ...f, linkUrl: e.target.value }))} placeholder="https://..." />
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => { setIsOpen(false); setEditing(null); reset(); }} className="border-orange-200">Cancel</Button>
-              <Button onClick={save} disabled={uploading || !form.imageUrl || isSaving} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white disabled:opacity-50">
+              <Button 
+                onClick={save} 
+                disabled={(uploading.hindi || uploading.english) || !form.imageUrl?.hindi || !form.imageUrl?.english || !form.description?.hindi || !form.description?.english || isSaving} 
+                className="bg-gradient-to-r from-orange-500 to-orange-600 text-white disabled:opacity-50"
+              >
                 {isSaving ? (
                   <>
                     <Clock className="h-4 w-4 mr-2 animate-spin" />
@@ -200,34 +425,103 @@ function MiddleSlidesPanel() {
       {loading ? (
         <div className="text-gray-500">Loading...</div>
       ) : items.length === 0 ? (
-        <div className="text-center text-gray-500 border rounded p-8">No middle slides found. Click "Add Image" to create one.</div>
+        <div className="text-center text-gray-500 border rounded p-8">No middle slides found. Click "Add Slide" to create one.</div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {items.map(it => (
-            <Card key={it.id} className="border overflow-hidden">
-              <div className="relative w-full h-40 md:h-44 lg:h-48">
-                <ImageWithFallback src={it.imageUrl} alt="slide" className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute top-2 left-2">
-                  <Badge className="text-xs bg-white/90 text-gray-700 border">{it.status}</Badge>
+            <Card key={it.id} className="border overflow-hidden hover:shadow-lg transition-all duration-200 border-orange-200/40 bg-white">
+              <div className="space-y-4 p-4">
+                {/* Hindi Image */}
+                <div className="relative w-full h-48">
+                  <div className="absolute top-2 left-2 z-10">
+                    <Badge className="text-xs bg-orange-500 text-white">हिंदी</Badge>
+                  </div>
+                  <ImageWithFallback 
+                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.hindi} 
+                    alt="Hindi slide" 
+                    className="absolute inset-0 w-full h-full object-cover rounded-lg" 
+                  />
                 </div>
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <Button size="sm" variant="secondary" onClick={() => toggle(it.id)} className="h-8 w-8 p-0 bg-white/90">
-                    <Star className={`h-4 w-4 ${it.featured ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => { setEditing(it); setForm(it); setIsOpen(true); }} className="h-8 w-8 p-0 bg-white/90 text-orange-600">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => del(it.id)} className="h-8 w-8 p-0 bg-white/90 text-red-600">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                
+                {/* English Image */}
+                <div className="relative w-full h-48">
+                  <div className="absolute top-2 left-2 z-10">
+                    <Badge className="text-xs bg-blue-500 text-white">English</Badge>
+                  </div>
+                  <ImageWithFallback 
+                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.english} 
+                    alt="English slide" 
+                    className="absolute inset-0 w-full h-full object-cover rounded-lg" 
+                  />
+                </div>
+                
+                {/* Content */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge className={`text-xs ${getStatusColorForMiddle(it.status)}`}>
+                      {it.status}
+                    </Badge>
+                    {it.featured && (
+                      <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
+                        <Star className="h-3 w-3 mr-1" />
+                        Featured
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {(typeof it.description === 'object' && it.description?.hindi) && (
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        <span className="font-medium">Hindi: </span>
+                        {it.description.hindi}
+                      </p>
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        <span className="font-medium">English: </span>
+                        {it.description.english}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between pt-2 border-t border-orange-100">
+                    <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
+                      Priority: {it.priority}
+                    </Badge>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="secondary" onClick={() => toggle(it.id)} className="h-8 w-8 p-0">
+                        <Star className={`h-4 w-4 ${it.featured ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => { 
+                        setEditing(it); 
+                        setForm({
+                          title: typeof it.title === 'object' ? it.title : { hindi: '', english: '' },
+                          description: typeof it.description === 'object' ? it.description : { hindi: '', english: '' },
+                          imageUrl: typeof it.imageUrl === 'string' ? { hindi: it.imageUrl, english: it.imageUrl } : it.imageUrl,
+                          status: it.status,
+                          featured: it.featured,
+                          priority: it.priority,
+                          linkUrl: it.linkUrl
+                        }); 
+                        setIsOpen(true); 
+                      }} className="h-8 w-8 p-0 text-orange-600">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => del(it.id)} className="h-8 w-8 p-0 text-red-600">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <CardContent className="flex items-center justify-between py-2">
-                <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">Priority: {it.priority}</Badge>
-                {it.featured && <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">Featured</Badge>}
-              </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+      
+      {items.length >= 5 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+          <p className="text-sm text-yellow-800">
+            <strong>Maximum limit reached:</strong> You have reached the maximum of 5 middle slides. Delete one to add a new slide.
+          </p>
         </div>
       )}
     </div>
@@ -245,9 +539,14 @@ export function SlideManagement() {
       try {
         const result = await slideService.getSlides();
         if (result.success && result.data) {
-          setSlides(result.data);
+          // Normalize slides to ensure bookName exists (for backward compatibility)
+          const normalizedSlides = result.data.map((slide: any) => ({
+            ...slide,
+            bookName: slide.bookName || { hindi: '', english: '' }
+          }));
+          setSlides(normalizedSlides);
         } else {
-          console.error('Failed to load slides:', result.error);
+          console.error('Failed to load slides');
         }
       } catch (error) {
         console.error('Error loading slides:', error);
@@ -273,6 +572,7 @@ export function SlideManagement() {
   const [newSlide, setNewSlide] = useState<Partial<SlideContent>>({
     title: { hindi: '', english: '' },
     description: { hindi: '', english: '' },
+    bookName: { hindi: '', english: '' },
     imageUrl: '',
     status: 'draft',
     featured: false,
@@ -374,6 +674,10 @@ export function SlideManagement() {
               hindi: slideData.descriptionHindi.trim(),
               english: slideData.descriptionEnglish.trim()
             },
+            bookName: {
+              hindi: '',
+              english: ''
+            },
             imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
             status: 'draft',
             featured: false,
@@ -451,6 +755,7 @@ export function SlideManagement() {
           english: titleEnglish
         },
         description: newSlide.description!,
+        bookName: newSlide.bookName || { hindi: '', english: '' },
         imageUrl: newSlide.imageUrl || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
         status: newSlide.status as SlideContent['status'],
         featured: newSlide.featured!,
@@ -491,6 +796,7 @@ export function SlideManagement() {
           english: titleEnglish
         },
         description: editingSlide.description,
+        bookName: editingSlide.bookName || { hindi: '', english: '' },
         imageUrl: editingSlide.imageUrl,
         status: editingSlide.status,
         featured: editingSlide.featured,
@@ -551,6 +857,7 @@ export function SlideManagement() {
     setNewSlide({
       title: { hindi: '', english: '' },
       description: { hindi: '', english: '' },
+      bookName: { hindi: '', english: '' },
       imageUrl: '',
       status: 'draft',
       featured: false,
@@ -761,6 +1068,29 @@ export function SlideManagement() {
                       className="bg-white border-orange-200 min-h-[80px]"
                     />
                   </div>
+                  
+                  <div>
+                    <Label htmlFor="bookname-en">Book Name (English)</Label>
+                    <Input
+                      id="bookname-en"
+                      value={editingSlide ? (editingSlide.bookName?.english || '') : (newSlide.bookName?.english || '')}
+                      onChange={(e) => {
+                        if (editingSlide) {
+                          setEditingSlide({
+                            ...editingSlide,
+                            bookName: { ...editingSlide.bookName, english: e.target.value }
+                          });
+                        } else {
+                          setNewSlide({
+                            ...newSlide,
+                            bookName: { ...newSlide.bookName || { hindi: '', english: '' }, english: e.target.value }
+                          });
+                        }
+                      }}
+                      placeholder="Enter book name in English"
+                      className="bg-white border-orange-200"
+                    />
+                  </div>
                 </div>
 
                 {/* Hindi Content */}
@@ -813,6 +1143,29 @@ export function SlideManagement() {
                       }}
                       placeholder="हिंदी विवरण दर्ज करें"
                       className="bg-white border-orange-200 min-h-[80px]"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="bookname-hi">Book Name (Hindi) / पुस्तक का नाम (हिंदी)</Label>
+                    <Input
+                      id="bookname-hi"
+                      value={editingSlide ? (editingSlide.bookName?.hindi || '') : (newSlide.bookName?.hindi || '')}
+                      onChange={(e) => {
+                        if (editingSlide) {
+                          setEditingSlide({
+                            ...editingSlide,
+                            bookName: { ...editingSlide.bookName, hindi: e.target.value }
+                          });
+                        } else {
+                          setNewSlide({
+                            ...newSlide,
+                            bookName: { ...newSlide.bookName || { hindi: '', english: '' }, hindi: e.target.value }
+                          });
+                        }
+                      }}
+                      placeholder="हिंदी में पुस्तक का नाम दर्ज करें"
+                      className="bg-white border-orange-200"
                     />
                   </div>
                 </div>
@@ -1013,7 +1366,10 @@ export function SlideManagement() {
                   size="sm"
                   variant="secondary"
                   onClick={() => {
-                    setEditingSlide(slide);
+                    setEditingSlide({
+                      ...slide,
+                      bookName: slide.bookName || { hindi: '', english: '' }
+                    });
                     setIsDialogOpen(true);
                   }}
                   className="h-8 w-8 p-0 bg-white/90 hover:bg-white text-orange-600"
@@ -1049,6 +1405,15 @@ export function SlideManagement() {
               <p className="text-sm text-gray-600 line-clamp-3">
                 {slide.description[languageView]}
               </p>
+              
+              {slide.bookName && (slide.bookName[languageView] || slide.bookName.hindi || slide.bookName.english) && (
+                <div className="pt-2 border-t border-orange-100">
+                  <p className="text-xs text-gray-500 mb-1">Book Name:</p>
+                  <p className="text-sm font-medium text-orange-600">
+                    {slide.bookName[languageView] || slide.bookName.hindi || slide.bookName.english}
+                  </p>
+                </div>
+              )}
               
               <div className="flex items-center justify-between pt-2 border-t border-orange-100">
                 <div className="flex items-center gap-2 text-sm text-gray-500">

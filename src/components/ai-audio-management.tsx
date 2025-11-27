@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "./ui/textarea";
 import { ScrollArea } from "./ui/scroll-area";
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Bot, Plus, Edit, ArrowLeft, Save, Upload, Trash2, Volume2, Play, Pause, Clock, FileText, Search } from 'lucide-react';
+import { Bot, Plus, Edit, ArrowLeft, Save, Upload, Trash2, Volume2, Play, Pause, Clock, FileText, Search, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { aiAudioService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
 
@@ -606,11 +606,12 @@ export function AIAudioManagement() {
         container: [
           ['bold', 'italic'],
           [{ 'header': [3, false] }],
+          [{ 'align': [] }],
         ],
       },
     }), []);
 
-    const formats = ['bold', 'italic', 'header'];
+    const formats = ['bold', 'italic', 'header', 'align'];
 
     const handleChange = (value: string) => {
       setEditorContent(value);
@@ -887,6 +888,16 @@ export function AIAudioManagement() {
   const handleSave = async () => {
       setIsSaving(true);
       try {
+        // Extract text alignment from HTML content (Quill stores it in class names)
+        let textAlignment: 'left' | 'center' | 'right' | 'justify' = 'left';
+        if (text.includes('ql-align-center')) {
+          textAlignment = 'center';
+        } else if (text.includes('ql-align-right')) {
+          textAlignment = 'right';
+        } else if (text.includes('ql-align-justify')) {
+          textAlignment = 'justify';
+        }
+        
         let audioUrl = audioItem.audioUrl;
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `ai-audio/${audioItem.id}`);
@@ -902,6 +913,7 @@ export function AIAudioManagement() {
         const result = await aiAudioService.updateAudioItem(audioItem.id, {
           title: audioItem.title || 'Audio Item', // Keep existing title
           text,
+          textAlignment,
           status: audioItem.status || 'Draft', // Keep existing status
           audioUrl: audioUrl
         });
@@ -910,6 +922,7 @@ export function AIAudioManagement() {
           const updatedItem = {
             ...audioItem,
       text,
+            textAlignment,
             audioFile: audioFile ? audioFile.name : audioItem.audioFile,
             audioUrl: audioUrl
           };
