@@ -27,6 +27,7 @@ export interface Book {
   readCount: number;
   rating: number;
   featured: boolean;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +42,7 @@ export interface Chapter {
   duration?: number;
   status: 'published' | 'draft';
   textAlignment?: 'left' | 'center' | 'right' | 'justify';
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }

@@ -79,7 +79,8 @@ class BookService {
         books = books.filter(book => 
           book.title.toLowerCase().includes(searchLower) ||
           book.author.toLowerCase().includes(searchLower) ||
-          book.description.toLowerCase().includes(searchLower)
+          book.description.toLowerCase().includes(searchLower) ||
+          (book.tags && book.tags.some((tag: string) => tag.toLowerCase().includes(searchLower)))
         );
       }
 
@@ -115,7 +116,12 @@ class BookService {
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const bookData = { id: docSnap.id, ...docSnap.data() } as Book;
+        const rawData = docSnap.data();
+        const bookData = { 
+          id: docSnap.id, 
+          ...rawData,
+          tags: Array.isArray(rawData.tags) ? rawData.tags : [] // Ensure tags is always an array
+        } as Book;
         
         // Get chapters for this book (no orderBy to avoid index), fallback to legacy
         let chaptersSnap = await getDocs(query(
@@ -130,7 +136,11 @@ class BookService {
         }
         const chapters = (
           chaptersSnap.docs
-            .map(doc => ({ id: doc.id, ...doc.data() })) as Chapter[]
+            .map(doc => ({ 
+              id: doc.id, 
+              ...doc.data(),
+              tags: Array.isArray(doc.data().tags) ? doc.data().tags : [] // Normalize chapter tags
+            })) as Chapter[]
         ).sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
 
         bookData.chapters = chapters;
@@ -157,6 +167,7 @@ class BookService {
       const now = new Date().toISOString();
       const newBook = {
         ...bookData,
+        tags: Array.isArray(bookData.tags) ? bookData.tags.filter((t: string) => t && t.trim()) : [],
         chapters: [],
         totalChapters: 0,
         readCount: 0,
@@ -186,10 +197,24 @@ class BookService {
   async updateBook(id: string, updates: Partial<Book>): Promise<ApiResponse<Book>> {
     try {
       const docRef = doc(db, this.booksCollection, id);
-      const updateData = {
+      
+      // Ensure tags are always an array if provided
+      const updateData: any = {
         ...updates,
         updatedAt: new Date().toISOString()
       };
+      
+      // Explicitly handle tags - only include if provided in updates
+      if (updates.tags !== undefined) {
+        updateData.tags = Array.isArray(updates.tags) ? updates.tags.filter((t: string) => t && t.trim()) : [];
+      }
+
+      // Remove undefined values to avoid Firestore errors
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
 
       await updateDoc(docRef, updateData);
 
@@ -298,7 +323,11 @@ class BookService {
         querySnapshot = await getDocs(qLegacy);
       }
 
-      let chapters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Chapter[];
+      let chapters = querySnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        tags: Array.isArray(doc.data().tags) ? doc.data().tags : [] // Normalize tags
+      })) as Chapter[];
       // Sort on client to avoid index
       chapters = chapters.sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
       return { success: true, data: chapters };
@@ -315,7 +344,15 @@ class BookService {
         snap = await getDoc(doc(db, this.legacyChaptersCollection, id));
       }
       if (snap.exists()) {
-        return { success: true, data: { id: snap.id, ...snap.data() } as Chapter };
+        const rawData = snap.data();
+        return { 
+          success: true, 
+          data: { 
+            id: snap.id, 
+            ...rawData,
+            tags: Array.isArray(rawData.tags) ? rawData.tags : [] // Normalize tags
+          } as Chapter 
+        };
       }
       return { success: false, error: 'Chapter not found' };
     } catch (error: any) {
@@ -329,6 +366,7 @@ class BookService {
       const now = new Date().toISOString();
       const newChapter: any = {
         ...chapterData,
+        tags: Array.isArray(chapterData.tags) ? chapterData.tags.filter((t: string) => t && t.trim()) : [],
         createdAt: now,
         updatedAt: now,
         createdBy: auth.currentUser?.uid || null,
@@ -363,7 +401,18 @@ class BookService {
   // Update chapter
   async updateChapter(id: string, updates: Partial<Chapter>): Promise<ApiResponse<Chapter>> {
     try {
-      const updateData = { ...updates, updatedAt: new Date().toISOString() };
+      const updateData = { 
+        ...updates, 
+        tags: updates.tags !== undefined ? (Array.isArray(updates.tags) ? updates.tags : []) : undefined,
+        updatedAt: new Date().toISOString() 
+      };
+      
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key as keyof typeof updateData] === undefined) {
+          delete updateData[key as keyof typeof updateData];
+        }
+      });
 
       // Try update in primary collection; if not found, try legacy
       let updatedDoc = await getDoc(doc(db, this.chaptersCollection, id));
@@ -377,11 +426,13 @@ class BookService {
 
       // Get updated document
       if (updatedDoc.exists()) {
+        const rawData = updatedDoc.data();
         return {
           success: true,
           data: {
             id: updatedDoc.id,
-            ...updatedDoc.data()
+            ...rawData,
+            tags: Array.isArray(rawData.tags) ? rawData.tags : [] // Normalize tags in response
           } as Chapter,
           message: 'Chapter updated successfully'
         };
@@ -577,7 +628,8 @@ class BookService {
         books = books.filter(b =>
           b.title.toLowerCase().includes(s) ||
           b.author.toLowerCase().includes(s) ||
-          b.description.toLowerCase().includes(s)
+          b.description.toLowerCase().includes(s) ||
+          (b.tags && b.tags.some((tag: string) => tag.toLowerCase().includes(s)))
         );
       }
       callback(books);

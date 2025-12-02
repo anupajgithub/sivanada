@@ -16,6 +16,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { BookOpen, Plus, Edit, Eye, FileText, Volume2, ArrowLeft, Save, Play, Pause, Upload, Bold, Italic, Image, Type, Trash2, Clock, Search, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { bookService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
+import { TagInput } from './ui/tag-input';
 
 // Helpers to map DB values to UI text
 function toUiStatus(status: string) {
@@ -40,22 +41,29 @@ export function BooksManagement() {
   const [editingBook, setEditingBook] = useState<any>(null);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newTags, setNewTags] = useState<string[]>([]);
 
   const hindiBooks = books.filter(b => b.language === 'hindi');
   const englishBooks = books.filter(b => b.language === 'english');
 
-  // Filter books based on search term
-  const filteredHindiBooks = hindiBooks.filter(book => 
-    book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (book.category && book.category.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter books based on search term (including tags)
+  const filteredHindiBooks = hindiBooks.filter(book => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesTitle = book.title.toLowerCase().includes(searchLower);
+    const matchesAuthor = book.author?.toLowerCase().includes(searchLower);
+    const matchesCategory = book.category?.toLowerCase().includes(searchLower);
+    const matchesTags = book.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower)) || false;
+    return matchesTitle || matchesAuthor || matchesCategory || matchesTags;
+  });
 
-  const filteredEnglishBooks = englishBooks.filter(book => 
-    book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (book.category && book.category.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredEnglishBooks = englishBooks.filter(book => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesTitle = book.title.toLowerCase().includes(searchLower);
+    const matchesAuthor = book.author?.toLowerCase().includes(searchLower);
+    const matchesCategory = book.category?.toLowerCase().includes(searchLower);
+    const matchesTags = book.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower)) || false;
+    return matchesTitle || matchesAuthor || matchesCategory || matchesTags;
+  });
 
   useEffect(() => {
     const unsub = bookService.subscribeToBooks({}, (list) => {
@@ -66,6 +74,7 @@ export function BooksManagement() {
         status: toUiStatus(b.status),
         cover: b.coverImage,
         category: b.category,
+        tags: Array.isArray(b.tags) ? b.tags : [],
         chapters: b.totalChapters || (b.chapters ? b.chapters.length : 0),
         audioChapters: 0,
         language: b.language || 'hindi'
@@ -118,6 +127,7 @@ export function BooksManagement() {
           id: c.id,
           title: c.title,
           content: c.content,
+          tags: c.tags || [],
           audioFile: c.audioUrl || null,
           audioUrl: c.audioUrl || '',
           order: c.chapterNumber,
@@ -262,7 +272,24 @@ export function BooksManagement() {
                   {chapters.map((chapter, index) => (
                     <div
                       key={chapter.id}
-                      onClick={() => setSelectedChapter(chapter)}
+                      onClick={async () => {
+                        // Fetch fresh chapter data to ensure we have all fields including tags
+                        const chapterResult = await bookService.getChapter(chapter.id);
+                        if (chapterResult.success && chapterResult.data) {
+                          const fullChapter = {
+                            ...chapterResult.data,
+                            tags: chapterResult.data.tags || [],
+                            audioFile: chapterResult.data.audioUrl || null,
+                            audioUrl: chapterResult.data.audioUrl || '',
+                            order: chapterResult.data.chapterNumber,
+                            wordCount: (chapterResult.data.content || '').replace(/<[^>]*>/g, '').trim().split(/\s+/).filter((w: string) => w.length > 0).length
+                          };
+                          setSelectedChapter(fullChapter);
+                        } else {
+                          // Fallback to current chapter data if fetch fails
+                          setSelectedChapter(chapter);
+                        }
+                      }}
                       className={`p-4 border-b border-orange-100 cursor-pointer hover:bg-orange-50 transition-colors ${
                         selectedChapter?.id === chapter.id ? 'bg-orange-50 border-l-4 border-l-orange-500' : ''
                       }`}
@@ -327,7 +354,9 @@ export function BooksManagement() {
         </div>
 
         {/* Add Chapter Dialog */}
-        <Dialog open={isAddChapterOpen} onOpenChange={setIsAddChapterOpen}>
+        <Dialog open={isAddChapterOpen} onOpenChange={(open) => {
+          setIsAddChapterOpen(open);
+        }}>
           <DialogContent className="sm:max-w-[500px] rounded-2xl border-orange-200/40">
             <DialogHeader className="pb-4">
               <DialogTitle className="text-2xl font-bold text-gray-900">Add New Chapter</DialogTitle>
@@ -339,6 +368,7 @@ export function BooksManagement() {
                   id: created.id,
                   title: created.title,
                   content: created.content || "",
+                  tags: created.tags || [],
                   audioFile: created.audioUrl || null,
                   audioUrl: created.audioUrl || '',
                   order: created.chapterNumber,
@@ -365,7 +395,12 @@ export function BooksManagement() {
             Manage Hindi and English categories with chapter editing capabilities
           </p>
         </div>
-        <Dialog open={isAddBookOpen} onOpenChange={setIsAddBookOpen}>
+        <Dialog open={isAddBookOpen} onOpenChange={(open) => {
+          setIsAddBookOpen(open);
+          if (!open) {
+            setNewTags([]);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 rounded-xl">
               <Plus className="h-5 w-5" />
@@ -430,6 +465,14 @@ export function BooksManagement() {
                   className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
                 />
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+                <TagInput
+                  tags={newTags}
+                  onChange={setNewTags}
+                  placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+                />
+              </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button 
                   variant="outline" 
@@ -456,16 +499,22 @@ export function BooksManagement() {
                         coverImage: '',
                         rating: 0,
                         featured: false,
+                        tags: Array.isArray(newTags) ? newTags.filter(t => t && t.trim()) : [],
                       } as any);
                       if (res.success && res.data) {
                         if (newCoverFile) {
                           const uploadResult = await uploadService.uploadImage(newCoverFile, `books/covers/${res.data.id}`);
                           if (uploadResult.success && uploadResult.url) {
-                            await bookService.updateBook(res.data.id, { coverImage: uploadResult.url });
+                            // Preserve tags when updating cover image
+                            const tagsToSave = Array.isArray(newTags) ? newTags.filter(t => t && t.trim()) : [];
+                            await bookService.updateBook(res.data.id, { 
+                              coverImage: uploadResult.url,
+                              tags: tagsToSave 
+                            });
                           }
                         }
                         setIsAddBookOpen(false);
-                        setNewTitle(""); setNewAuthor(""); setNewLanguage('hindi'); setNewCategory(""); setNewCoverFile(null);
+                        setNewTitle(""); setNewAuthor(""); setNewLanguage('hindi'); setNewCategory(""); setNewCoverFile(null); setNewTags([]);
                         toast.success('Category created successfully');
                       } else {
                         toast.error(res.error || 'Failed to create category');
@@ -504,15 +553,21 @@ export function BooksManagement() {
               book={editingBook}
               onSave={async (updatedBook) => {
                 if (editingBook) {
+                  // Convert UI status back to database status format
+                  const dbStatus = updatedBook.status?.toLowerCase() === 'published' ? 'published' : 
+                                   updatedBook.status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
+                  
                   const result = await bookService.updateBook(editingBook.id, {
                     title: updatedBook.title,
                     author: updatedBook.author,
                     description: updatedBook.description || '',
                     category: updatedBook.category,
                     language: updatedBook.language,
-                    status: updatedBook.status
+                    status: dbStatus,
+                    tags: Array.isArray(updatedBook.tags) ? updatedBook.tags.filter((t: string) => t && t.trim()) : [] // Filter out empty tags
                   });
                   if (result.success) {
+                    toast.success('Book updated successfully');
                     setIsEditBookOpen(false);
                     setEditingBook(null);
                   } else {
@@ -558,7 +613,7 @@ export function BooksManagement() {
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search categories by title, author, or category..."
+                  placeholder="Search categories by title, author, category, or tags..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-white border-orange-200 focus:border-orange-500 rounded-xl"
@@ -630,6 +685,17 @@ export function BooksManagement() {
                 {getCategoryBadge(book.category)}
               </div>
               
+              {/* Tags Display */}
+              {book.tags && book.tags.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {book.tags.map((tag: string, idx: number) => (
+                    <Badge key={idx} variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
               {/* Stats */}
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
@@ -647,9 +713,26 @@ export function BooksManagement() {
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  onClick={() => {
-                    setEditingBook(book);
-                    setIsEditBookOpen(true);
+                  onClick={async () => {
+                    // Fetch fresh book data to ensure we have all fields including tags
+                    const bookResult = await bookService.getBook(book.id);
+                    if (bookResult.success && bookResult.data) {
+                      const fullBook = {
+                        ...bookResult.data,
+                        cover: bookResult.data.coverImage,
+                        status: bookResult.data.status, // Keep original status for form
+                        tags: Array.isArray(bookResult.data.tags) ? bookResult.data.tags : []
+                      };
+                      setEditingBook(fullBook);
+                      setIsEditBookOpen(true);
+                    } else {
+                      // Fallback to current book data if fetch fails
+                      setEditingBook({
+                        ...book,
+                        tags: Array.isArray(book.tags) ? book.tags : []
+                      });
+                      setIsEditBookOpen(true);
+                    }
                   }}
                   className="rounded-lg border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300"
                 >
@@ -687,9 +770,19 @@ export function BooksManagement() {
   function ChapterEditor({ chapter, onSave, onDelete }: { chapter: any; onSave: (chapter: any) => void; onDelete: (chapterId: string) => void }) {
     const [title, setTitle] = useState(chapter.title);
     const [content, setContent] = useState(chapter.content);
+    const [tags, setTags] = useState<string[]>(chapter.tags || []);
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
+
+    // Update form when chapter prop changes
+    useEffect(() => {
+      if (chapter) {
+        setTitle(chapter.title || '');
+        setContent(chapter.content || '');
+        setTags(chapter.tags || []);
+      }
+    }, [chapter]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -705,21 +798,22 @@ export function BooksManagement() {
       }
       
       // Save HTML content directly to preserve formatting (bold, italic, alignment, etc.)
-      const result = await bookService.updateChapter(chapter.id, { title, content, textAlignment });
+      const tagsToSave = Array.isArray(tags) ? tags.filter(t => t && t.trim()) : [];
+      const result = await bookService.updateChapter(chapter.id, { title, content, textAlignment, tags: tagsToSave });
       if (result.success) {
+        let finalAudioUrl = chapter.audioUrl;
         if (audioFile) {
           const uploadResult = await uploadService.uploadAudio(audioFile, `books/audio/${chapter.id}`);
           if (uploadResult.success && uploadResult.url) {
             // Update chapter with audio URL
             await bookService.updateChapter(chapter.id, { audioUrl: uploadResult.url });
-            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name, audioUrl: uploadResult.url });
+            finalAudioUrl = uploadResult.url;
           } else {
             toast.error('Chapter updated but audio upload failed: ' + uploadResult.error);
-            onSave({ ...chapter, title, content, textAlignment, audioFile: audioFile.name });
           }
-        } else {
-          onSave({ ...chapter, title, content, textAlignment });
         }
+        // Update local state with saved data including tags
+        onSave({ ...chapter, title, content, textAlignment, tags: tagsToSave, audioFile: audioFile ? audioFile.name : chapter.audioFile, audioUrl: finalAudioUrl });
         toast.success('Chapter saved successfully');
       } else {
         toast.error('Failed to save chapter: ' + result.error);
@@ -823,6 +917,16 @@ export function BooksManagement() {
             />
           </div>
 
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+            <TagInput
+              tags={tags}
+              onChange={setTags}
+              placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+            />
+          </div>
+
           {/* Word Count */}
           <div className="text-right">
             <span className="text-sm text-gray-500">
@@ -836,6 +940,7 @@ export function BooksManagement() {
 
   function AddChapterForm({ onSave, onCancel }: { onSave: (chapter: any) => void; onCancel: () => void }) {
     const [title, setTitle] = useState('');
+    const [tags, setTags] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSubmit = async () => {
@@ -849,16 +954,19 @@ export function BooksManagement() {
       setIsSaving(true);
       try {
         const nextOrder = chapters.length + 1;
+        const tagsToSave = Array.isArray(tags) ? tags.filter(t => t && t.trim()) : [];
         const res = await bookService.createChapter({
           bookId: selectedBook.id,
           title: title.trim(),
           content: '',
           chapterNumber: nextOrder,
-          status: 'draft'
+          status: 'draft',
+          tags: tagsToSave
         } as any);
         if (res.success && res.data) {
           onSave(res.data);
           setTitle('');
+          setTags([]);
           toast.success('Chapter created successfully');
         } else {
           toast.error(res.error || 'Failed to create chapter. Ensure you are logged in and your Firestore rules allow writes.');
@@ -880,6 +988,15 @@ export function BooksManagement() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Enter chapter title"
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
           />
         </div>
         
@@ -918,9 +1035,27 @@ export function BooksManagement() {
     const [language, setLanguage] = useState(book?.language || 'hindi');
     const [status, setStatus] = useState(book?.status || 'draft');
     const [coverFile, setCoverFile] = useState<File | null>(null);
-    const [coverPreview, setCoverPreview] = useState(book?.coverImage || '');
+    const [coverPreview, setCoverPreview] = useState(book?.coverImage || book?.cover || '');
+    const [tags, setTags] = useState<string[]>(book?.tags || []);
     const [isSaving, setIsSaving] = useState(false);
     const coverInputRef = useRef<HTMLInputElement>(null);
+
+    // Update form when book prop changes
+    useEffect(() => {
+      if (book) {
+        setTitle(book.title || '');
+        setAuthor(book.author || '');
+        setDescription(book.description || '');
+        setCategory(book.category || '');
+        setLanguage(book.language || 'hindi');
+        // Convert status to lowercase if it's in UI format (Published -> published)
+        const dbStatus = book.status?.toLowerCase() === 'published' ? 'published' :
+                         book.status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
+        setStatus(dbStatus);
+        setCoverPreview(book.coverImage || book.cover || '');
+        setTags(Array.isArray(book.tags) ? book.tags : []);
+      }
+    }, [book]);
 
     const handleCoverChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -945,14 +1080,19 @@ export function BooksManagement() {
       if (title.trim() && author.trim()) {
         setIsSaving(true);
         try {
-          const updatedBook = {
+          // Convert UI status back to database status format
+          const dbStatus = status?.toLowerCase() === 'published' ? 'published' : 
+                           status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
+          
+          const updatedBook: any = {
             title: title.trim(),
             author: author.trim(),
             description: description.trim(),
             category: category.trim(),
             language,
-            status,
-            coverImage: coverPreview || book?.coverImage
+            status: dbStatus,
+            coverImage: coverPreview || book?.coverImage,
+            tags: Array.isArray(tags) ? tags.filter(t => t && t.trim()) : [] // Filter out empty tags
           };
           
           // If cover was changed, upload it
@@ -967,17 +1107,10 @@ export function BooksManagement() {
             }
           }
           
-          // Update the book in the database
-          const result = await bookService.updateBook(book.id, updatedBook);
-          if (result.success) {
-            onSave(updatedBook);
-            toast.success('Book updated successfully');
-          } else {
-            toast.error('Failed to update book: ' + result.error);
-          }
+          // Just call onSave - let the parent handle the actual save
+          onSave(updatedBook);
         } catch (error) {
           toast.error('Error updating book: ' + (error as Error).message);
-        } finally {
           setIsSaving(false);
         }
       }
@@ -1081,6 +1214,15 @@ export function BooksManagement() {
               className="hidden"
             />
           </div>
+        </div>
+        
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+          />
         </div>
         
         <div className="flex justify-end gap-3 pt-4">

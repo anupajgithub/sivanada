@@ -14,6 +14,20 @@ import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { slideService, uploadService, middleSlideService } from '../services';
 
+// Spiritual images array - odd indices (1,3,5,7,9) for Hindi, even indices (0,2,4,6,8) for English
+const spiritualImages = [
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684222/InShot_20251006_173801183_pyfkdj.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684236/InShot_20251006_102020836_asvkrw.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684234/InShot_20251006_170718457_gcf13z.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684235/InShot_20251006_174339940_oktzd1.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684231/InShot_20251006_173137299_h9p07l.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684232/InShot_20251006_104610214_zndfvi.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684222/InShot_20251006_172449600_p2jl44.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684234/InShot_20251006_102559865_ssrzi6.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684226/InShot_20251006_171454585_bya40v.jpg', name: '' },
+  { url: 'https://res.cloudinary.com/dyltyzwo6/image/upload/v1761684227/InShot_20251006_103944934_bsupz5.jpg', name: '' },
+];
+
 interface SlideContent {
   id: string;
   title: {
@@ -123,6 +137,21 @@ function MiddleSlidesPanel() {
       toast.error('Please upload both Hindi and English images');
       return;
     }
+    
+    // Check if images are still uploading
+    if (uploading.hindi || uploading.english) {
+      toast.error('Please wait for image uploads to complete');
+      return;
+    }
+    
+    // Validate that images are not local blob URLs (should be Cloudinary URLs)
+    const hindiUrl = form.imageUrl.hindi;
+    const englishUrl = form.imageUrl.english;
+    if (hindiUrl.startsWith('blob:') || englishUrl.startsWith('blob:')) {
+      toast.error('Please wait for images to finish uploading to Cloudinary before saving');
+      return;
+    }
+    
     if (!form.description?.hindi || !form.description?.english) {
       toast.error('Please fill in descriptions in both languages');
       return;
@@ -201,9 +230,14 @@ function MiddleSlidesPanel() {
     } catch {}
 
     setUploading(prev => ({ ...prev, [language]: true }));
-    const res = await middleSlideService.uploadMiddleSlideImage(file);
+    
+    // Upload to Cloudinary - pass slide ID if editing for better organization
+    const slideId = editing?.id || `temp-${Date.now()}`;
+    const res = await middleSlideService.uploadMiddleSlideImage(file, slideId);
     setUploading(prev => ({ ...prev, [language]: false }));
+    
     if (res.success && res.data) {
+      // Replace with Cloudinary URL
       setForm(f => ({ 
         ...f, 
         imageUrl: { 
@@ -211,9 +245,22 @@ function MiddleSlidesPanel() {
           [language]: res.data as string 
         } as any
       }));
-      toast.success(`${language === 'hindi' ? 'Hindi' : 'English'} image uploaded`);
+      toast.success(`${language === 'hindi' ? 'Hindi' : 'English'} image uploaded to Cloudinary successfully`);
     } else {
-      toast.error(res.error || 'Upload failed');
+      toast.error(res.error || 'Upload failed. Please try again.');
+      // Revert to previous image on error
+      if (editing && editing.imageUrl) {
+        const currentUrl = typeof editing.imageUrl === 'string' 
+          ? editing.imageUrl 
+          : editing.imageUrl[language];
+        setForm(f => ({ 
+          ...f, 
+          imageUrl: { 
+            ...f.imageUrl, 
+            [language]: currentUrl 
+          } as any
+        }));
+      }
     }
   };
 
@@ -233,6 +280,97 @@ function MiddleSlidesPanel() {
     if (res.success && res.data) setItems(prev => prev.map(i => i.id === id ? res.data as any : i));
   };
 
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  const initializeSpiritualImages = async () => {
+    // Block in demo mode
+    if (typeof window !== 'undefined' && localStorage.getItem('demoUser')) {
+      toast.error('Demo mode cannot write to Firestore. Please log in with a Firebase admin account to initialize slides.');
+      return;
+    }
+
+    if (items.length > 0) {
+      const confirm = window.confirm(`You already have ${items.length} slide(s). This will create 5 new slides. Continue?`);
+      if (!confirm) return;
+    }
+
+    setIsInitializing(true);
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      // Create 5 slides, pairing odd indices (Hindi) with even indices (English)
+      for (let i = 0; i < 5; i++) {
+        const hindiIndex = i * 2 + 1; // 1, 3, 5, 7, 9
+        const englishIndex = i * 2; // 0, 2, 4, 6, 8
+
+        const hindiImage = spiritualImages[hindiIndex];
+        const englishImage = spiritualImages[englishIndex];
+
+        if (!hindiImage || !englishImage) {
+          failCount++;
+          continue;
+        }
+
+        const slideData = {
+          title: {
+            hindi: `Spiritual Slide ${i + 1}`,
+            english: `Spiritual Slide ${i + 1}`
+          },
+          description: {
+            hindi: `आध्यात्मिक सामग्री ${i + 1}`,
+            english: `Spiritual Content ${i + 1}`
+          },
+          imageUrl: {
+            hindi: hindiImage.url,
+            english: englishImage.url
+          },
+          status: 'published' as const,
+          featured: i === 0, // First slide is featured
+          priority: i + 1,
+          linkUrl: ''
+        };
+
+        const result = await middleSlideService.createMiddleSlide(slideData as any);
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+          console.error(`Failed to create slide ${i + 1}:`, result.error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully created ${successCount} slide(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
+        // Reload slides
+        const res = await middleSlideService.getMiddleSlides({ sortBy: 'priority', sortOrder: 'asc', limit: 100 } as any);
+        if (res.success) {
+          const convertedItems = res.data.map((item: any) => {
+            if (typeof item.imageUrl === 'string') {
+              return {
+                ...item,
+                title: item.title || { hindi: '', english: '' },
+                description: item.description || { hindi: '', english: '' },
+                imageUrl: {
+                  hindi: item.imageUrl,
+                  english: item.imageUrl
+                }
+              };
+            }
+            return item;
+          });
+          setItems(convertedItems);
+        }
+      } else {
+        toast.error(`Failed to create slides. ${failCount} failed.`);
+      }
+    } catch (error) {
+      toast.error('Error initializing slides: ' + (error as Error).message);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -240,16 +378,37 @@ function MiddleSlidesPanel() {
           <h2 className="text-xl font-semibold text-gray-900">Middle Slides</h2>
           <p className="text-sm text-gray-600 mt-1">Maximum 5 slides (10 images: 5 Hindi + 5 English)</p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              className="bg-gradient-to-r from-orange-500 to-orange-600 text-white"
-              disabled={!editing && items.length >= 5}
+        <div className="flex gap-2">
+          {items.length === 0 && (
+            <Button
+              onClick={initializeSpiritualImages}
+              disabled={isInitializing}
+              variant="outline"
+              className="border-green-200 text-green-600 hover:bg-green-50"
             >
-              <Plus className="h-4 w-4 mr-2" /> Add Slide
+              {isInitializing ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Initializing...
+                </>
+              ) : (
+                <>
+                  <Image className="h-4 w-4 mr-2" />
+                  Initialize with Spiritual Images
+                </>
+              )}
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          )}
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                className="bg-gradient-to-r from-orange-500 to-orange-600 text-white"
+                disabled={!editing && items.length >= 5}
+              >
+                <Plus className="h-4 w-4 mr-2" /> Add Slide
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editing ? 'Edit Middle Slide' : 'Add Middle Slide'}</DialogTitle>
               <DialogDescription>
@@ -287,7 +446,8 @@ function MiddleSlidesPanel() {
                   
                   <div className="space-y-2">
                     <Label>English Image *</Label>
-                    <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500 mb-2">Upload your own image (stored in Cloudinary) or select from spiritual images below</p>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Button 
                         type="button" 
                         variant="outline" 
@@ -296,7 +456,7 @@ function MiddleSlidesPanel() {
                         className="border-orange-200 text-orange-600 hover:bg-orange-50"
                       >
                         <Upload className="h-4 w-4 mr-2" /> 
-                        {uploading.english ? 'Uploading...' : 'Choose English Image'}
+                        {uploading.english ? 'Uploading to Cloudinary...' : 'Upload Image'}
                       </Button>
                       <input 
                         ref={englishFileInputRef} 
@@ -305,6 +465,38 @@ function MiddleSlidesPanel() {
                         onChange={(e) => pickImage(e, 'english')} 
                         className="hidden" 
                       />
+                      {/* Quick select from spiritual images - even indices (0,2,4,6,8) for English */}
+                      <div className="flex gap-2 flex-wrap">
+                        {spiritualImages.map((img, idx) => {
+                          // Only show even indices (0, 2, 4, 6, 8) for English
+                          if (idx % 2 === 0) {
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setForm(f => ({
+                                    ...f,
+                                    imageUrl: {
+                                      ...f.imageUrl,
+                                      english: img.url
+                                    } as any
+                                  }));
+                                }}
+                                className={`relative w-16 h-16 rounded border-2 overflow-hidden ${
+                                  form.imageUrl?.english === img.url
+                                    ? 'border-orange-500 ring-2 ring-orange-200'
+                                    : 'border-gray-200 hover:border-orange-300'
+                                }`}
+                                title={`Select English Image ${(idx / 2) + 1}`}
+                              >
+                                <img src={img.url} alt={`English ${(idx / 2) + 1}`} className="w-full h-full object-cover" />
+                              </button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
                     </div>
                     {form.imageUrl?.english ? (
                       <img src={form.imageUrl.english} alt="English preview" className="w-full h-40 object-cover rounded border" />
@@ -337,7 +529,8 @@ function MiddleSlidesPanel() {
                   
                   <div className="space-y-2">
                     <Label>Hindi Image * / हिंदी छवि *</Label>
-                    <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500 mb-2">Upload your own image (stored in Cloudinary) or select from spiritual images below</p>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Button 
                         type="button" 
                         variant="outline" 
@@ -346,7 +539,7 @@ function MiddleSlidesPanel() {
                         className="border-orange-200 text-orange-600 hover:bg-orange-50"
                       >
                         <Upload className="h-4 w-4 mr-2" /> 
-                        {uploading.hindi ? 'Uploading...' : 'Choose Hindi Image'}
+                        {uploading.hindi ? 'Uploading to Cloudinary...' : 'Upload Image'}
                       </Button>
                       <input 
                         ref={hindiFileInputRef} 
@@ -355,6 +548,38 @@ function MiddleSlidesPanel() {
                         onChange={(e) => pickImage(e, 'hindi')} 
                         className="hidden" 
                       />
+                      {/* Quick select from spiritual images - odd indices (1,3,5,7,9) for Hindi */}
+                      <div className="flex gap-2 flex-wrap">
+                        {spiritualImages.map((img, idx) => {
+                          // Only show odd indices (1, 3, 5, 7, 9) for Hindi
+                          if (idx % 2 === 1) {
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setForm(f => ({
+                                    ...f,
+                                    imageUrl: {
+                                      ...f.imageUrl,
+                                      hindi: img.url
+                                    } as any
+                                  }));
+                                }}
+                                className={`relative w-16 h-16 rounded border-2 overflow-hidden ${
+                                  form.imageUrl?.hindi === img.url
+                                    ? 'border-orange-500 ring-2 ring-orange-200'
+                                    : 'border-gray-200 hover:border-orange-300'
+                                }`}
+                                title={`Select Hindi Image ${Math.floor(idx / 2) + 1}`}
+                              >
+                                <img src={img.url} alt={`Hindi ${Math.floor(idx / 2) + 1}`} className="w-full h-full object-cover" />
+                              </button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
                     </div>
                     {form.imageUrl?.hindi ? (
                       <img src={form.imageUrl.hindi} alt="Hindi preview" className="w-full h-40 object-cover rounded border" />
@@ -418,8 +643,9 @@ function MiddleSlidesPanel() {
                 )}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {loading ? (
@@ -434,22 +660,22 @@ function MiddleSlidesPanel() {
                 {/* Hindi Image */}
                 <div className="relative w-full h-48">
                   <div className="absolute top-2 left-2 z-10">
-                    <Badge className="text-xs bg-orange-500 text-white">हिंदी</Badge>
+                    <Badge className="text-xs bg-orange-500 text-white"> English</Badge>
                   </div>
                   <ImageWithFallback 
-                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.hindi} 
+                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.english} 
                     alt="Hindi slide" 
                     className="absolute inset-0 w-full h-full object-cover rounded-lg" 
                   />
                 </div>
                 
-                {/* English Image */}
+                {/* English Image  check img badge change */}
                 <div className="relative w-full h-48">
                   <div className="absolute top-2 left-2 z-10">
-                    <Badge className="text-xs bg-blue-500 text-white">English</Badge>
+                    <Badge className="text-xs bg-blue-500 text-white">हिंदी</Badge>
                   </div>
                   <ImageWithFallback 
-                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.english} 
+                    src={typeof it.imageUrl === 'string' ? it.imageUrl : it.imageUrl.hindi} 
                     alt="English slide" 
                     className="absolute inset-0 w-full h-full object-cover rounded-lg" 
                   />
@@ -678,7 +904,7 @@ export function SlideManagement() {
               hindi: '',
               english: ''
             },
-            imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
+            imageUrl: '',
             status: 'draft',
             featured: false,
             category: 'spiritual',
@@ -712,9 +938,8 @@ export function SlideManagement() {
   const generateImageForSlide = async (title: string) => {
     setIsImageUploading(true);
     try {
-      // For now, use a placeholder image service or default image
-      // In a real implementation, you would integrate with an image generation API
-      const imageUrl = `https://picsum.photos/800/600?random=${Date.now()}`;
+      // For now, use a default empty image - users should upload or select from spiritual images
+      const imageUrl = '';
       
       if (editingSlide) {
         setEditingSlide({ ...editingSlide, imageUrl });
@@ -756,7 +981,7 @@ export function SlideManagement() {
         },
         description: newSlide.description!,
         bookName: newSlide.bookName || { hindi: '', english: '' },
-        imageUrl: newSlide.imageUrl || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop&crop=center',
+        imageUrl: newSlide.imageUrl || '',
         status: newSlide.status as SlideContent['status'],
         featured: newSlide.featured!,
         category: newSlide.category as SlideContent['category'],

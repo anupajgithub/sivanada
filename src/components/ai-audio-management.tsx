@@ -15,6 +15,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Bot, Plus, Edit, ArrowLeft, Save, Upload, Trash2, Volume2, Play, Pause, Clock, FileText, Search, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { aiAudioService, uploadService } from '../services';
 import { toast } from 'sonner@2.0.3';
+import { TagInput } from './ui/tag-input';
 
 // Helpers to map DB values to UI text
 function toUiStatus(status: string) {
@@ -36,12 +37,16 @@ export function AIAudioManagement() {
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newTags, setNewTags] = useState<string[]>([]);
 
-  // Filter categories based on search term
-  const filteredCategories = categories.filter(category => 
-    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter categories based on search term (including tags)
+  const filteredCategories = categories.filter(category => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesName = category.name.toLowerCase().includes(searchLower);
+    const matchesDescription = category.description?.toLowerCase().includes(searchLower);
+    const matchesTags = category.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower)) || false;
+    return matchesName || matchesDescription || matchesTags;
+  });
 
   useEffect(() => {
   const loadCategories = async () => {
@@ -113,6 +118,7 @@ export function AIAudioManagement() {
               id: ch.id,
               title: ch.title,
               description: ch.description || '',
+              tags: ch.tags || [],
               order: ch.order || idx + 1,
               audioItemsCount: wordCount,
               audioItems: ch.audioItems || []
@@ -256,13 +262,15 @@ export function AIAudioManagement() {
                     categoryId: selectedCategory.id,
                     title: created.title,
                     description: created.description || '',
-                    order: nextOrder
-                  });
+                    order: nextOrder,
+                    tags: created.tags || []
+                  } as any);
                   if (res.success && res.data) {
                     const chapter = {
                       id: res.data.id,
                       title: res.data.title,
                       description: res.data.description || '',
+                      tags: res.data.tags || [],
                       order: res.data.order || nextOrder,
                       audioItemsCount: 0,
                       audioItems: []
@@ -338,6 +346,14 @@ export function AIAudioManagement() {
                   className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
                 />
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+                <TagInput
+                  tags={newTags}
+                  onChange={setNewTags}
+                  placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+                />
+              </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button 
                   variant="outline" 
@@ -352,8 +368,9 @@ export function AIAudioManagement() {
                     const res = await aiAudioService.createCategory({
                       name: newName.trim(),
                       description: newDescription.trim(),
-                      status: 'Draft'
-                    });
+                      status: 'Draft',
+                      tags: newTags
+                    } as any);
                     if (res.success && res.data) {
                       if (newImageFile) {
                         const uploadResult = await uploadService.uploadImage(newImageFile, `ai-audio/categories/${res.data.id}`);
@@ -362,7 +379,7 @@ export function AIAudioManagement() {
                         }
                       }
                     setIsAddCategoryOpen(false);
-                      setNewName(""); setNewDescription(""); setNewImageFile(null);
+                      setNewName(""); setNewDescription(""); setNewImageFile(null); setNewTags([]);
                       toast.success('Category created successfully');
                       // Reload categories
                       const reloadResult = await aiAudioService.getAllCategoriesWithContent();
@@ -373,6 +390,7 @@ export function AIAudioManagement() {
                           description: cat.description || '',
                           status: toUiStatus(cat.status || 'draft'),
                           imageUrl: cat.imageUrl || '',
+                          tags: cat.tags || [],
                           chapters: (cat.chapters || []).length,
                           audioItemsCount: (cat.chapters || []).reduce((sum: number, ch: any) => 
                             sum + (ch.audioItems?.length || 0), 0
@@ -413,7 +431,8 @@ export function AIAudioManagement() {
                     name: updatedCategory.name,
                     description: updatedCategory.description,
                     status: statusMap[updatedCategory.status] || 'Draft',
-                    imageUrl: updatedCategory.imageUrl
+                    imageUrl: updatedCategory.imageUrl,
+                    tags: updatedCategory.tags || []
                   } as any);
                   if (result.success) {
                     setIsEditCategoryOpen(false);
@@ -463,7 +482,7 @@ export function AIAudioManagement() {
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Search categories by name or description..."
+                placeholder="Search categories by name, description, or tags..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 bg-white border-orange-200 focus:border-orange-500 rounded-xl"
@@ -522,6 +541,17 @@ export function AIAudioManagement() {
               <div className="flex items-center gap-2 flex-wrap">
                 {getStatusBadge(category.status)}
           </div>
+
+          {/* Tags Display */}
+          {category.tags && category.tags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {category.tags.map((tag: string, idx: number) => (
+                <Badge key={idx} variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
 
           {/* Stats */}
               <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -655,11 +685,20 @@ export function AIAudioManagement() {
 
   function ChapterEditor({ chapter, category, onSave, onDelete }: { chapter: any; category: any; onSave: (chapter: any) => void; onDelete: (chapterId: string) => void }) {
     const [title, setTitle] = useState(chapter.title);
+    const [tags, setTags] = useState<string[]>(chapter.tags || []);
     const [text, setText] = useState('');
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [audioUrl, setAudioUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const audioInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      // Update tags when chapter changes
+      if (chapter) {
+        setTitle(chapter.title || '');
+        setTags(chapter.tags || []);
+      }
+    }, [chapter]);
 
     useEffect(() => {
       // Load audio item for this chapter
@@ -670,10 +709,14 @@ export function AIAudioManagement() {
             const foundCategory = result.data.find((c: any) => c.id === category.id);
             if (foundCategory) {
               const foundChapter = foundCategory.chapters?.find((ch: any) => ch.id === chapter.id);
-              if (foundChapter && foundChapter.audioItems && foundChapter.audioItems.length > 0) {
-                const item = foundChapter.audioItems[0]; // Get first audio item
-                setText(item.text || '');
-                setAudioUrl(item.audioUrl || '');
+              if (foundChapter) {
+                // Update tags from fresh data
+                setTags(foundChapter.tags || []);
+                if (foundChapter.audioItems && foundChapter.audioItems.length > 0) {
+                  const item = foundChapter.audioItems[0]; // Get first audio item
+                  setText(item.text || '');
+                  setAudioUrl(item.audioUrl || '');
+                }
               }
             }
                   }
@@ -687,8 +730,8 @@ export function AIAudioManagement() {
     const handleSave = async () => {
       setIsSaving(true);
       try {
-        // Update chapter title
-        const chapterResult = await aiAudioService.updateChapter(chapter.id, { title, description: '' });
+        // Update chapter title and tags
+        const chapterResult = await aiAudioService.updateChapter(chapter.id, { title, description: '', tags });
         if (!chapterResult.success) {
           toast.error('Failed to save chapter: ' + chapterResult.error);
           setIsSaving(false);
@@ -724,7 +767,7 @@ export function AIAudioManagement() {
                 audioUrl: finalAudioUrl
               });
               if (updateResult.success) {
-                onSave({ ...chapter, title });
+                onSave({ ...chapter, title, tags });
                 toast.success('Chapter saved successfully');
               } else {
                 toast.error('Failed to save audio item: ' + updateResult.error);
@@ -749,7 +792,7 @@ export function AIAudioManagement() {
                     audioUrl: finalAudioUrl
                   });
                 }
-                onSave({ ...chapter, title });
+                onSave({ ...chapter, title, tags });
                 toast.success('Chapter saved successfully');
                   } else {
                 toast.error('Failed to create audio item: ' + createResult.error);
@@ -873,6 +916,16 @@ export function AIAudioManagement() {
                 duration=""
               />
             )}
+          </div>
+          
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+            <TagInput
+              tags={tags}
+              onChange={setTags}
+              placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+            />
           </div>
         </CardContent>
       </Card>
@@ -1038,6 +1091,7 @@ export function AIAudioManagement() {
 
   function AddChapterForm({ onSave, onCancel }: { onSave: (chapter: any) => void; onCancel: () => void }) {
     const [title, setTitle] = useState('');
+    const [tags, setTags] = useState<string[]>([]);
 
     return (
       <div className="space-y-6">
@@ -1051,6 +1105,15 @@ export function AIAudioManagement() {
             className="rounded-xl border-orange-200/60 focus:border-orange-500 focus:ring-orange-500/20"
           />
             </div>
+        
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+          />
+        </div>
         
         <div className="flex justify-end gap-3 pt-4">
           <Button
@@ -1066,7 +1129,7 @@ export function AIAudioManagement() {
                 toast.error('Please enter a chapter title');
                 return;
               }
-              onSave({ title: title.trim(), description: '' });
+              onSave({ title: title.trim(), description: '', tags });
             }}
             disabled={!title.trim()}
             className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
@@ -1082,9 +1145,21 @@ export function AIAudioManagement() {
     const [name, setName] = useState(category?.name || '');
     const [description, setDescription] = useState(category?.description || '');
     const [status, setStatus] = useState(category?.status || 'Draft');
+    const [tags, setTags] = useState<string[]>(category?.tags || []);
   const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState(category?.imageUrl || '');
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Update form when category prop changes
+  useEffect(() => {
+    if (category) {
+      setName(category.name || '');
+      setDescription(category.description || '');
+      setStatus(category.status || 'Draft');
+      setTags(category.tags || []);
+      setImagePreview(category.imageUrl || '');
+    }
+  }, [category]);
 
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1168,6 +1243,14 @@ export function AIAudioManagement() {
         />
       </div>
       </div>
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-gray-700">Tags</Label>
+        <TagInput
+          tags={tags}
+          onChange={setTags}
+          placeholder="Add tags for searching (e.g., meditation, philosophy, spiritual)..."
+        />
+      </div>
       <div className="flex justify-end gap-3 pt-4">
           <Button 
             variant="outline" 
@@ -1186,7 +1269,8 @@ export function AIAudioManagement() {
                 name: name.trim(),
         description: description.trim(),
                 status,
-                imageUrl: imagePreview
+                imageUrl: imagePreview,
+                tags
               });
             }}
             disabled={!name.trim()}

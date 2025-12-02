@@ -20,6 +20,7 @@ export interface AIAudioCategory {
   name: string;
   description: string;
   status: 'Published' | 'Draft';
+  tags: string[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -30,6 +31,7 @@ export interface AIAudioChapter {
   title: string;
   description: string;
   order: number;
+  tags: string[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -128,6 +130,7 @@ class AIAudioService {
     try {
       const newCategory = {
         ...categoryData,
+        tags: Array.isArray(categoryData.tags) ? categoryData.tags.filter((t: string) => t && t.trim()) : [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -155,10 +158,22 @@ class AIAudioService {
   async updateCategory(categoryId: string, updates: Partial<AIAudioCategory>): Promise<ApiResponse<AIAudioCategory>> {
     try {
       const docRef = doc(db, this.categoriesCollection, categoryId);
-      const updateData = {
+      const updateData: any = {
         ...updates,
         updatedAt: new Date().toISOString()
       };
+      
+      // Explicitly handle tags - ensure they're always arrays if provided
+      if (updates.tags !== undefined) {
+        updateData.tags = Array.isArray(updates.tags) ? updates.tags.filter((t: string) => t && t.trim()) : [];
+      }
+      
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
       
       await updateDoc(docRef, updateData);
       
@@ -280,6 +295,7 @@ class AIAudioService {
     try {
       const newChapter = {
         ...chapterData,
+        tags: Array.isArray(chapterData.tags) ? chapterData.tags.filter((t: string) => t && t.trim()) : [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -307,10 +323,22 @@ class AIAudioService {
   async updateChapter(chapterId: string, updates: Partial<AIAudioChapter>): Promise<ApiResponse<AIAudioChapter>> {
     try {
       const docRef = doc(db, this.chaptersCollection, chapterId);
-      const updateData = {
+      const updateData: any = {
         ...updates,
         updatedAt: new Date().toISOString()
       };
+      
+      // Explicitly handle tags - ensure they're always arrays if provided
+      if (updates.tags !== undefined) {
+        updateData.tags = Array.isArray(updates.tags) ? updates.tags.filter((t: string) => t && t.trim()) : [];
+      }
+      
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
       
       await updateDoc(docRef, updateData);
       
