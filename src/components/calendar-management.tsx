@@ -1,45 +1,97 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Calendar, Edit, Plus, Trash2, Clock, MapPin, Users, Search, Filter } from 'lucide-react';
+import { Calendar, Edit, Plus, Trash2, Search, Download } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner@2.0.3';
 import { calendarService } from '../services';
+import { CalendarEvent } from '../types';
+import { seedCalendarEvents, formatDateForStorage } from '../services/calendarSeedData';
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  location?: string;
-  attendees?: number;
-  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high';
-  category: 'meeting' | 'event' | 'deadline' | 'reminder';
-}
+const MONTHS = [
+  { value: 'JAN', label: 'January' },
+  { value: 'FEB', label: 'February' },
+  { value: 'MAR', label: 'March' },
+  { value: 'APR', label: 'April' },
+  { value: 'MAY', label: 'May' },
+  { value: 'JUN', label: 'June' },
+  { value: 'JUL', label: 'July' },
+  { value: 'AUG', label: 'August' },
+  { value: 'SEP', label: 'September' },
+  { value: 'OCT', label: 'October' },
+  { value: 'NOV', label: 'November' },
+  { value: 'DEC', label: 'December' },
+];
+
+const COMMON_EVENT_TYPES = [
+  'Fast',
+  'Festival',
+  'Anniversary',
+  'Ceremony',
+  'Puja',
+  'Aradhana',
+  'Jayanti',
+  'Utsav',
+  'Mahotsav',
+  'Reminder',
+  'Meeting',
+];
 
 export function CalendarManagement() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({
+    title: '',
+    date: '',
+    month: 'JAN',
+    year: new Date().getFullYear(),
+    type: 'Festival',
+    description: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
 
   // Load events from Firebase
   useEffect(() => {
     const loadEvents = async () => {
       try {
-        const result = await calendarService.getEvents();
+        setLoading(true);
+        const result = await calendarService.getEvents({ limit: 1000 });
         if (result.success && result.data) {
-          setEvents(result.data);
-        } else {
-          console.error('Failed to load events:', result.error);
+          // Sort events by year, month, and date
+          const sortedEvents = result.data.sort((a, b) => {
+            if (!a.year || !a.month || !a.date) return 1;
+            if (!b.year || !b.month || !b.date) return -1;
+            
+            if (a.year !== b.year) return a.year - b.year;
+            
+            const monthOrder: { [key: string]: number } = {
+              'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+              'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+            };
+            
+            const aMonth = monthOrder[a.month] || 0;
+            const bMonth = monthOrder[b.month] || 0;
+            if (aMonth !== bMonth) return aMonth - bMonth;
+            
+            return parseInt(a.date) - parseInt(b.date);
+          });
+          
+          setEvents(sortedEvents);
         }
       } catch (error) {
         console.error('Error loading events:', error);
+        toast.error('Failed to load events');
       } finally {
         setLoading(false);
       }
@@ -48,35 +100,28 @@ export function CalendarManagement() {
     loadEvents();
   }, []);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({
-    title: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    time: '09:00',
-    location: '',
-    attendees: 0,
-    status: 'scheduled',
-    priority: 'medium',
-    category: 'meeting'
-  });
+  // Get unique event types from all events for filter dropdown
+  const availableTypes = React.useMemo(() => {
+    const types = new Set<string>();
+    events.forEach(event => {
+      if (event.type) {
+        types.add(event.type);
+      }
+    });
+    return Array.from(types).sort();
+  }, [events]);
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || event.category === categoryFilter;
+                         (event.description && event.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesType = typeFilter === 'all' || 
+                       (event.type && event.type.toLowerCase() === typeFilter.toLowerCase());
     
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesType;
   });
 
   const handleCreateEvent = async () => {
-    if (!newEvent.title || !newEvent.description) {
+    if (!newEvent.title || !newEvent.date || !newEvent.month || !newEvent.year || !newEvent.type) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -84,28 +129,36 @@ export function CalendarManagement() {
     try {
       const result = await calendarService.createEvent({
         title: newEvent.title!,
-        description: newEvent.description!,
+        description: newEvent.description || newEvent.title!,
         date: newEvent.date!,
-        time: newEvent.time!,
-        location: newEvent.location,
-        attendees: newEvent.attendees,
-        status: newEvent.status as CalendarEvent['status'],
-        priority: newEvent.priority as CalendarEvent['priority'],
-        category: newEvent.category as CalendarEvent['category']
+        month: newEvent.month!,
+        year: newEvent.year!,
+        type: newEvent.type!
       });
 
       if (result.success && result.data) {
-        setEvents([...events, result.data]);
+        setEvents([...events, result.data].sort((a, b) => {
+          if (!a.year || !a.month || !a.date) return 1;
+          if (!b.year || !b.month || !b.date) return -1;
+          if (a.year !== b.year) return a.year - b.year;
+          const monthOrder: { [key: string]: number } = {
+            'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+            'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+          };
+          const aMonth = monthOrder[a.month] || 0;
+          const bMonth = monthOrder[b.month] || 0;
+          if (aMonth !== bMonth) return aMonth - bMonth;
+          return parseInt(a.date) - parseInt(b.date);
+        }));
         setNewEvent({
           title: '',
+          date: '',
+          month: 'JAN',
+          year: new Date().getFullYear(),
+          type: 'Festival',
           description: '',
-          date: new Date().toISOString().split('T')[0],
-          time: '09:00',
-          location: '',
-          attendees: 0,
-          status: 'scheduled',
-          priority: 'medium',
-          category: 'meeting'
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         });
         setIsDialogOpen(false);
         toast.success('Event created successfully!');
@@ -118,15 +171,31 @@ export function CalendarManagement() {
   };
 
   const handleEditEvent = async () => {
-    if (!editingEvent || !editingEvent.title || !editingEvent.description) {
+    if (!editingEvent || !editingEvent.title || !editingEvent.date || !editingEvent.month || !editingEvent.year || !editingEvent.type) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      const res = await calendarService.updateEvent(editingEvent.id, editingEvent as any);
+      const res = await calendarService.updateEvent(editingEvent.id, {
+        ...editingEvent,
+        updatedAt: new Date().toISOString()
+      } as any);
+      
       if (res.success && res.data) {
-        setEvents(events.map(event => event.id === editingEvent.id ? res.data! : event));
+        setEvents(events.map(event => event.id === editingEvent.id ? res.data! : event).sort((a, b) => {
+          if (!a.year || !a.month || !a.date) return 1;
+          if (!b.year || !b.month || !b.date) return -1;
+          if (a.year !== b.year) return a.year - b.year;
+          const monthOrder: { [key: string]: number } = {
+            'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+            'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+          };
+          const aMonth = monthOrder[a.month] || 0;
+          const bMonth = monthOrder[b.month] || 0;
+          if (aMonth !== bMonth) return aMonth - bMonth;
+          return parseInt(a.date) - parseInt(b.date);
+        }));
         toast.success('Event updated successfully!');
       } else {
         toast.error(res.error || 'Failed to update event');
@@ -139,6 +208,10 @@ export function CalendarManagement() {
   };
 
   const handleDeleteEvent = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+
     try {
       const res = await calendarService.deleteEvent(id);
       if (res.success) {
@@ -152,32 +225,124 @@ export function CalendarManagement() {
     }
   };
 
-  const getStatusColor = (status: CalendarEvent['status']) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'ongoing': return 'bg-green-100 text-green-800 border-green-200';
-      case 'completed': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+  const handleSeedEvents = async () => {
+    if (!confirm('This will add initial calendar events. Continue?')) {
+      return;
+    }
+
+    setSeeding(true);
+    try {
+      const result = await seedCalendarEvents();
+      if (result.success) {
+        toast.success(result.message);
+        // Reload events
+        const loadResult = await calendarService.getEvents({ limit: 1000 });
+        if (loadResult.success && loadResult.data) {
+          const sortedEvents = loadResult.data.sort((a, b) => {
+            if (!a.year || !a.month || !a.date) return 1;
+            if (!b.year || !b.month || !b.date) return -1;
+            if (a.year !== b.year) return a.year - b.year;
+            const monthOrder: { [key: string]: number } = {
+              'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+              'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+            };
+            const aMonth = monthOrder[a.month] || 0;
+            const bMonth = monthOrder[b.month] || 0;
+            if (aMonth !== bMonth) return aMonth - bMonth;
+            return parseInt(a.date) - parseInt(b.date);
+          });
+          setEvents(sortedEvents);
+        }
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error: any) {
+      toast.error('Error seeding events: ' + error.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const getTypeColor = (type?: string) => {
+    if (!type) return 'bg-gray-100 text-gray-800 border-gray-200';
+    
+    const typeLower = type.toLowerCase();
+    switch (typeLower) {
+      case 'fast': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'festival': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'anniversary': return 'bg-pink-100 text-pink-800 border-pink-200';
+      case 'ceremony': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'puja': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'aradhana': return 'bg-red-100 text-red-800 border-red-200';
+      case 'jayanti': return 'bg-green-100 text-green-800 border-green-200';
+      case 'utsav': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'mahotsav': return 'bg-rose-100 text-rose-800 border-rose-200';
+      case 'reminder': return 'bg-slate-100 text-slate-800 border-slate-200';
+      case 'meeting': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const getPriorityColor = (priority: CalendarEvent['priority']) => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  const formatEventDate = (event: CalendarEvent) => {
+    if (event.date && event.month && event.year) {
+      return `${event.date} ${event.month} ${event.year}`;
     }
+    return 'Date not set';
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-orange-600">Loading events...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Calendar Management</h1>
-        <p className="text-orange-600 mt-2">Manage events, meetings, and important dates</p>
+        <p className="text-orange-600 mt-2">Manage festivals and important dates</p>
       </div>
+
+      {/* Show banner if no events */}
+      {!loading && events.length === 0 && (
+        <Card className="bg-gradient-to-r from-green-50 to-orange-50 border-2 border-green-200 shadow-lg">
+          <CardContent className="pt-6 pb-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Download className="h-5 w-5 text-green-600" />
+                  <h3 className="text-xl font-bold text-gray-900">Quick Start: Load Initial Events</h3>
+                </div>
+                <p className="text-sm text-gray-600">Click the button to automatically add all 31 pre-configured calendar events (Dec 2025 - Mar 2026) including festivals and fasting days.</p>
+              </div>
+              <Button 
+                onClick={handleSeedEvents}
+                disabled={seeding}
+                size="lg"
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg px-6 py-6 text-base font-semibold whitespace-nowrap"
+              >
+                {seeding ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Loading Events...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5 mr-2" />
+                    Load Initial Events (31 Events)
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Controls */}
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
@@ -192,259 +357,292 @@ export function CalendarManagement() {
               className="pl-10 bg-white border-orange-200 focus:border-orange-500"
             />
           </div>
-          {/* <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-white border-orange-200">
-              <SelectValue placeholder="Status" />
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-48 bg-white border-orange-200">
+              <SelectValue placeholder="Filter by Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="ongoing">Ongoing</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="all">All Types</SelectItem>
+              {availableTypes.length > 0 && (
+                <>
+                  {availableTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              {availableTypes.length === 0 && (
+                <>
+                  <SelectItem value="Fast">Fast</SelectItem>
+                  <SelectItem value="Festival">Festival</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-40 bg-white border-orange-200">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="meeting">Meeting</SelectItem>
-              <SelectItem value="event">Event</SelectItem>
-              <SelectItem value="deadline">Deadline</SelectItem>
-              <SelectItem value="reminder">Reminder</SelectItem>
-            </SelectContent>
-          </Select> */}
         </div>
 
-        {/* Add Event Button */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Event
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingEvent ? 'Edit Event' : 'Create New Event'}</DialogTitle>
-              <DialogDescription>
-                {editingEvent ? 'Update event details' : 'Add a new event to the calendar'}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Event Title *</Label>
-                <Input
-                  id="title"
-                  value={editingEvent ? editingEvent.title : newEvent.title}
-                  onChange={(e) => {
-                    if (editingEvent) {
-                      setEditingEvent({ ...editingEvent, title: e.target.value });
-                    } else {
-                      setNewEvent({ ...newEvent, title: e.target.value });
-                    }
-                  }}
-                  placeholder="Enter event title"
-                  className="bg-white border-orange-200"
-                />
-              </div>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          {/* <Button 
+            onClick={handleSeedEvents}
+            disabled={seeding || loading}
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 font-medium"
+            title="Load 31 pre-configured calendar events"
+          >
+            {seeding ? (
+              <>
+                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                Loading...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Load Initial Events
+              </>
+            )}
+          </Button> */}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Event
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <DialogTitle>{editingEvent ? 'Edit Event' : 'Create New Event'}</DialogTitle>
+                  {(editingEvent ? editingEvent.type : newEvent.type) && (
+                    <Badge className={getTypeColor(editingEvent ? editingEvent.type : newEvent.type)}>
+                      {editingEvent ? editingEvent.type : newEvent.type}
+                    </Badge>
+                  )}
+                </div>
+                <DialogDescription>
+                  {editingEvent ? 'Update event details' : 'Add a new event to the calendar'}
+                  {((editingEvent ? editingEvent.date && editingEvent.month && editingEvent.year : newEvent.date && newEvent.month && newEvent.year)) && (
+                    <span className="block mt-1 text-orange-600 font-medium">
+                      Date: {formatEventDate({
+                        date: editingEvent ? editingEvent.date : newEvent.date || '',
+                        month: editingEvent ? editingEvent.month : newEvent.month || '',
+                        year: editingEvent ? editingEvent.year : newEvent.year || 0
+                      } as CalendarEvent)}
+                    </span>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                {/* Date Selection Section */}
+                <div className="bg-orange-50/50 p-4 rounded-lg border border-orange-200">
+                  <Label className="text-sm font-semibold text-gray-700 mb-3 block">Event Date *</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="date" className="text-xs text-gray-600">Day</Label>
+                      <Input
+                        id="date"
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={editingEvent ? editingEvent.date : newEvent.date || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (editingEvent) {
+                            setEditingEvent({ ...editingEvent, date: value });
+                          } else {
+                            setNewEvent({ ...newEvent, date: value });
+                          }
+                        }}
+                        placeholder="15"
+                        className="bg-white border-orange-200"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="month" className="text-xs text-gray-600">Month</Label>
+                      <Select
+                        value={editingEvent ? editingEvent.month : newEvent.month || 'JAN'}
+                        onValueChange={(value) => {
+                          if (editingEvent) {
+                            setEditingEvent({ ...editingEvent, month: value });
+                          } else {
+                            setNewEvent({ ...newEvent, month: value });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-orange-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTHS.map(month => (
+                            <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="year" className="text-xs text-gray-600">Year</Label>
+                      <Input
+                        id="year"
+                        type="number"
+                        min="2020"
+                        max="2100"
+                        value={editingEvent ? editingEvent.year : newEvent.year || new Date().getFullYear()}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (editingEvent) {
+                            setEditingEvent({ ...editingEvent, year: value });
+                          } else {
+                            setNewEvent({ ...newEvent, year: value });
+                          }
+                        }}
+                        placeholder="2025"
+                        className="bg-white border-orange-200"
+                      />
+                    </div>
+                  </div>
+                  {/* Date Preview */}
+                  {((editingEvent ? editingEvent.date : newEvent.date) && 
+                    (editingEvent ? editingEvent.month : newEvent.month) && 
+                    (editingEvent ? editingEvent.year : newEvent.year)) && (
+                    <div className="mt-3 pt-3 border-t border-orange-200">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-semibold text-gray-700">
+                          Selected Date: {formatEventDate({
+                            date: editingEvent ? editingEvent.date : newEvent.date || '',
+                            month: editingEvent ? editingEvent.month : newEvent.month || '',
+                            year: editingEvent ? editingEvent.year : newEvent.year || 0
+                          } as CalendarEvent)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <Label htmlFor="description">Description *</Label>
-                <Textarea
-                  id="description"
-                  value={editingEvent ? editingEvent.description : newEvent.description}
-                  onChange={(e) => {
-                    if (editingEvent) {
-                      setEditingEvent({ ...editingEvent, description: e.target.value });
-                    } else {
-                      setNewEvent({ ...newEvent, description: e.target.value });
-                    }
-                  }}
-                  placeholder="Enter event description"
-                  className="bg-white border-orange-200 min-h-[80px]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="date">Date *</Label>
+                {/* Event Type Section */}
+                <div className="bg-purple-50/50 p-4 rounded-lg border border-purple-200">
+                  <Label htmlFor="type" className="text-sm font-semibold text-gray-700 mb-3 block">Event Type *</Label>
                   <Input
-                    id="date"
-                    type="date"
-                    value={editingEvent ? editingEvent.date : newEvent.date}
+                    id="type"
+                    value={editingEvent ? (editingEvent.type || '') : (newEvent.type || '')}
                     onChange={(e) => {
+                      const value = e.target.value;
                       if (editingEvent) {
-                        setEditingEvent({ ...editingEvent, date: e.target.value });
+                        setEditingEvent({ ...editingEvent, type: value });
                       } else {
-                        setNewEvent({ ...newEvent, date: e.target.value });
+                        setNewEvent({ ...newEvent, type: value });
                       }
                     }}
+                    placeholder="Enter event type (e.g., Fast, Festival, Anniversary, Puja)"
+                    className="bg-white border-purple-200 mb-3"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs text-gray-600 mr-2 self-center">Quick select:</span>
+                    {COMMON_EVENT_TYPES.map((type) => {
+                      const currentType = editingEvent ? editingEvent.type : newEvent.type || '';
+                      const isSelected = currentType.toLowerCase() === type.toLowerCase();
+                      return (
+                        <Button
+                          key={type}
+                          type="button"
+                          variant={isSelected ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            if (editingEvent) {
+                              setEditingEvent({ ...editingEvent, type: type });
+                            } else {
+                              setNewEvent({ ...newEvent, type: type });
+                            }
+                          }}
+                          className={
+                            isSelected
+                              ? `${getTypeColor(type)} border-0 text-xs h-7`
+                              : "text-xs h-7 border-purple-300 text-purple-700 hover:bg-purple-100"
+                          }
+                        >
+                          {type}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {((editingEvent ? editingEvent.type : newEvent.type) && 
+                    !COMMON_EVENT_TYPES.some(t => t.toLowerCase() === ((editingEvent ? editingEvent.type : newEvent.type) || '').toLowerCase())) && (
+                    <div className="mt-2 text-xs text-purple-600">
+                      ✓ Using custom type: <span className="font-semibold">{editingEvent ? editingEvent.type : newEvent.type}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Title Section */}
+                <div>
+                  <Label htmlFor="title">Event Title *</Label>
+                  <Input
+                    id="title"
+                    value={editingEvent ? editingEvent.title : newEvent.title || ''}
+                    onChange={(e) => {
+                      if (editingEvent) {
+                        setEditingEvent({ ...editingEvent, title: e.target.value });
+                      } else {
+                        setNewEvent({ ...newEvent, title: e.target.value });
+                      }
+                    }}
+                    placeholder="Enter event title (e.g., Ekadashi, Purnima, Holi)"
                     className="bg-white border-orange-200"
                   />
                 </div>
-                {/* <div>
-                  <Label htmlFor="time">Time *</Label>
+
+                {/* Description Section */}
+                <div>
+                  <Label htmlFor="description">Description (Optional)</Label>
                   <Input
-                    id="time"
-                    type="time"
-                    value={editingEvent ? editingEvent.time : newEvent.time}
+                    id="description"
+                    value={editingEvent ? (editingEvent.description || '') : (newEvent.description || '')}
                     onChange={(e) => {
                       if (editingEvent) {
-                        setEditingEvent({ ...editingEvent, time: e.target.value });
+                        setEditingEvent({ ...editingEvent, description: e.target.value });
                       } else {
-                        setNewEvent({ ...newEvent, time: e.target.value });
+                        setNewEvent({ ...newEvent, description: e.target.value });
                       }
                     }}
+                    placeholder="Enter event description"
                     className="bg-white border-orange-200"
                   />
-                </div> */}
+                </div>
               </div>
 
-              {/* <div>
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  value={editingEvent ? editingEvent.location || '' : newEvent.location || ''}
-                  onChange={(e) => {
-                    if (editingEvent) {
-                      setEditingEvent({ ...editingEvent, location: e.target.value });
-                    } else {
-                      setNewEvent({ ...newEvent, location: e.target.value });
-                    }
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    setEditingEvent(null);
+                    setNewEvent({
+                      title: '',
+                      date: '',
+                      month: 'JAN',
+                      year: new Date().getFullYear(),
+                      type: 'Festival',
+                      description: '',
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString()
+                    });
                   }}
-                  placeholder="Enter location (optional)"
-                  className="bg-white border-orange-200"
-                />
-              </div> */}
-
-              {/* <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={editingEvent ? editingEvent.category : newEvent.category}
-                    onValueChange={(value) => {
-                      if (editingEvent) {
-                        setEditingEvent({ ...editingEvent, category: value as CalendarEvent['category'] });
-                      } else {
-                        setNewEvent({ ...newEvent, category: value as CalendarEvent['category'] });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="bg-white border-orange-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="event">Event</SelectItem>
-                      <SelectItem value="deadline">Deadline</SelectItem>
-                      <SelectItem value="reminder">Reminder</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select
-                    value={editingEvent ? editingEvent.priority : newEvent.priority}
-                    onValueChange={(value) => {
-                      if (editingEvent) {
-                        setEditingEvent({ ...editingEvent, priority: value as CalendarEvent['priority'] });
-                      } else {
-                        setNewEvent({ ...newEvent, priority: value as CalendarEvent['priority'] });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="bg-white border-orange-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={editingEvent ? editingEvent.status : newEvent.status}
-                    onValueChange={(value) => {
-                      if (editingEvent) {
-                        setEditingEvent({ ...editingEvent, status: value as CalendarEvent['status'] });
-                      } else {
-                        setNewEvent({ ...newEvent, status: value as CalendarEvent['status'] });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="bg-white border-orange-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="scheduled">Scheduled</SelectItem>
-                      <SelectItem value="ongoing">Ongoing</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div> */}
-{/* 
-              <div>
-                <Label htmlFor="attendees">Expected Attendees</Label>
-                <Input
-                  id="attendees"
-                  type="number"
-                  min="0"
-                  value={editingEvent ? editingEvent.attendees || 0 : newEvent.attendees || 0}
-                  onChange={(e) => {
-                    if (editingEvent) {
-                      setEditingEvent({ ...editingEvent, attendees: parseInt(e.target.value) || 0 });
-                    } else {
-                      setNewEvent({ ...newEvent, attendees: parseInt(e.target.value) || 0 });
-                    }
-                  }}
-                  placeholder="0"
-                  className="bg-white border-orange-200"
-                />
-              </div> */}
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsDialogOpen(false);
-                  setEditingEvent(null);
-                  setNewEvent({
-                    title: '',
-                    description: '',
-                    date: new Date().toISOString().split('T')[0],
-                    time: '09:00',
-                    location: '',
-                    attendees: 0,
-                    status: 'scheduled',
-                    priority: 'medium',
-                    category: 'meeting'
-                  });
-                }}
-                className="border-orange-200 text-orange-600 hover:bg-orange-50"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={editingEvent ? handleEditEvent : handleCreateEvent}
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-              >
-                {editingEvent ? 'Update Event' : 'Create Event'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                  className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={editingEvent ? handleEditEvent : handleCreateEvent}
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+                >
+                  {editingEvent ? 'Update Event' : 'Create Event'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Events Grid */}
@@ -454,14 +652,13 @@ export function CalendarManagement() {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <CardTitle className="text-lg text-gray-900 line-clamp-1">{event.title}</CardTitle>
+                  <CardTitle className="text-lg text-gray-900 line-clamp-2">{event.title}</CardTitle>
                   <div className="flex items-center gap-2 mt-2">
-                    {/* <Badge className={`text-xs ${getStatusColor(event.status)}`}>
-                      {event.status}
-                    </Badge>
-                    <Badge className={`text-xs ${getPriorityColor(event.priority)}`}>
-                      {event.priority}
-                    </Badge> */}
+                    {event.type && (
+                      <Badge className={`text-xs ${getTypeColor(event.type)}`}>
+                        {event.type}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1 ml-2">
@@ -488,52 +685,31 @@ export function CalendarManagement() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-gray-600 line-clamp-2">{event.description}</p>
+              {event.description && (
+                <p className="text-sm text-gray-600 line-clamp-2">{event.description}</p>
+              )}
               
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Calendar className="h-4 w-4 text-orange-500" />
-                  <span>{new Date(event.date).toLocaleDateString()}</span>
-                  {/* <Clock className="h-4 w-4 text-orange-500 ml-2" /> */}
-                  {/* <span>{event.time}</span> */}
+                  <span className="font-medium">{formatEventDate(event)}</span>
                 </div>
-                
-                {event.location && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 text-orange-500" />
-                    <span className="line-clamp-1">{event.location}</span>
-                  </div>
-                )}
-                
-                {/* {event.attendees && event.attendees > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Users className="h-4 w-4 text-orange-500" />
-                    <span>{event.attendees} expected attendees</span>
-                  </div>
-                )} */}
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-orange-100">
-                {/* <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
-                  {event.category}
-                </Badge> */}
-                <span className="text-xs text-gray-500">
-                  ID: {event.id}
-                </span>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {filteredEvents.length === 0 && (
+      {filteredEvents.length === 0 && !loading && (
         <div className="text-center py-12">
           <Calendar className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all' 
+            {searchTerm || typeFilter !== 'all' 
               ? 'Try adjusting your search or filters' 
-              : 'Create your first event to get started'}
+              : events.length === 0 
+                ? 'Click "Load Initial Events" button above to add pre-configured events, or create your first event'
+                : 'Create your first event to get started'}
           </p>
         </div>
       )}

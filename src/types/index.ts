@@ -96,15 +96,19 @@ export interface Wallpaper {
 export interface CalendarEvent {
   id: string;
   title: string;
-  description: string;
-  date: string;
-  time: string;
+  description?: string;
+  date: string; // Day as string: "15"
+  month: string; // Month abbreviation: "DEC", "JAN", "FEB", etc.
+  year: number; // Year as number: 2025
+  type: string; // Event type - can be custom (e.g., "Fast", "Festival", "Anniversary", "Ceremony", etc.)
+  // Legacy fields for backward compatibility
+  time?: string;
   location?: string;
   attendees?: number;
-  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high';
-  category: 'meeting' | 'event' | 'deadline' | 'reminder';
-  createdBy: string;
+  status?: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high';
+  category?: 'meeting' | 'event' | 'deadline' | 'reminder';
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
