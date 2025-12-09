@@ -71,10 +71,22 @@ For production, set up proper security rules in **Firestore Database** > **Rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     // Users collection - only authenticated users can read/write their own data
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // YouTube Videos Collection
+    match /youtubeVideos/{videoId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
     }
     
     // Admin-only collections

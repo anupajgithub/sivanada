@@ -204,3 +204,19 @@ export interface DateRange {
   start: string;
   end: string;
 }
+
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  description?: string;
+  videoUrl: string;
+  videoId: string; // Extracted YouTube video ID
+  thumbnailUrl: string; // YouTube thumbnail URL
+  category?: 'spiritual' | 'educational' | 'music' | 'talks' | 'other';
+  tags: string[];
+  featured: boolean;
+  status: 'published' | 'draft' | 'archived';
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}

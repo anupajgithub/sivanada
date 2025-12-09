@@ -10,6 +10,7 @@ export { slideService } from './slideService';
 export { middleSlideService } from './middleSlideService';
 export { dashboardService } from './dashboardService';
 export { uploadService } from './uploadService';
+export { youtubeService } from './youtubeService';
 
 // Re-export types
 export type * from '../types';
