@@ -543,7 +543,13 @@ export function BooksManagement() {
         </Dialog>
 
         {/* Edit Book Dialog */}
-        <Dialog open={isEditBookOpen} onOpenChange={setIsEditBookOpen}>
+        <Dialog open={isEditBookOpen} onOpenChange={(open) => {
+          setIsEditBookOpen(open);
+          if (!open) {
+            // Reset editingBook when dialog closes
+            setEditingBook(null);
+          }
+        }}>
           <DialogContent className="sm:max-w-[500px] rounded-2xl border-orange-200/40">
             <DialogHeader className="pb-4">
               <DialogTitle className="text-2xl font-bold text-gray-900">Edit Book</DialogTitle>
@@ -557,19 +563,43 @@ export function BooksManagement() {
                   const dbStatus = updatedBook.status?.toLowerCase() === 'published' ? 'published' : 
                                    updatedBook.status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
                   
-                  const result = await bookService.updateBook(editingBook.id, {
+                  // Build update data - always include coverImage to ensure it's updated
+                  // Prioritize updatedBook.coverImage (new upload) over existing values
+                  const updateData: any = {
                     title: updatedBook.title,
                     author: updatedBook.author,
                     description: updatedBook.description || '',
                     category: updatedBook.category,
                     language: updatedBook.language,
                     status: dbStatus,
+                    coverImage: updatedBook.coverImage || editingBook?.coverImage || editingBook?.cover || '', // Always include coverImage, prioritize new upload
                     tags: Array.isArray(updatedBook.tags) ? updatedBook.tags.filter((t: string) => t && t.trim()) : [] // Filter out empty tags
-                  });
+                  };
+                  
+                  console.log('🔄 Updating book in database with coverImage:', updateData.coverImage);
+                  const result = await bookService.updateBook(editingBook.id, updateData);
+                  console.log('📝 Update result:', result.success ? 'Success' : 'Failed', result.data?.coverImage || result.error);
                   if (result.success) {
+                    // Update local books state immediately with the new cover image
+                    setBooks(prevBooks => 
+                      prevBooks.map(b => 
+                        b.id === editingBook.id 
+                          ? { ...b, cover: updatedBook.coverImage || b.cover }
+                          : b
+                      )
+                    );
+                    // Update editingBook state if dialog stays open
+                    if (result.data) {
+                      setEditingBook({
+                        ...editingBook,
+                        coverImage: result.data.coverImage,
+                        cover: result.data.coverImage,
+                        ...result.data
+                      });
+                    }
                     toast.success('Book updated successfully');
                     setIsEditBookOpen(false);
-                    setEditingBook(null);
+                    // editingBook will be reset by onOpenChange handler
                   } else {
                     toast.error('Failed to update book: ' + result.error);
                   }
@@ -577,7 +607,7 @@ export function BooksManagement() {
               }}
               onCancel={() => {
                 setIsEditBookOpen(false);
-                setEditingBook(null);
+                // editingBook will be reset by onOpenChange handler
               }}
             />
           </DialogContent>
@@ -1040,6 +1070,9 @@ export function BooksManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const coverInputRef = useRef<HTMLInputElement>(null);
 
+    // Track if we've uploaded a new image in this session
+    const [hasNewUpload, setHasNewUpload] = useState(false);
+
     // Update form when book prop changes
     useEffect(() => {
       if (book) {
@@ -1052,8 +1085,17 @@ export function BooksManagement() {
         const dbStatus = book.status?.toLowerCase() === 'published' ? 'published' :
                          book.status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
         setStatus(dbStatus);
-        setCoverPreview(book.coverImage || book.cover || '');
+        // Only update coverPreview if there's no pending file upload and no new upload in this session
+        if (!coverFile && !hasNewUpload) {
+          setCoverPreview(book.coverImage || book.cover || '');
+        }
         setTags(Array.isArray(book.tags) ? book.tags : []);
+        // Reset file input if book changes (dialog reopened)
+        if (coverInputRef.current) {
+          coverInputRef.current.value = '';
+        }
+        // Reset upload flag when book changes (new edit session)
+        setHasNewUpload(false);
       }
     }, [book]);
 
@@ -1061,18 +1103,13 @@ export function BooksManagement() {
       const file = event.target.files?.[0];
       if (file) {
         setCoverFile(file);
-        // Upload to Cloudinary immediately for preview
-        const result = await uploadService.uploadImage(file, `books/covers/${book.id}`);
-        if (result.success && result.url) {
-          setCoverPreview(result.url);
-        } else {
-          // Fallback to local preview
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setCoverPreview(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
+        setHasNewUpload(false); // Reset flag when new file is selected
+        // Show local preview immediately
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setCoverPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
       }
     };
 
@@ -1084,6 +1121,33 @@ export function BooksManagement() {
           const dbStatus = status?.toLowerCase() === 'published' ? 'published' : 
                            status?.toLowerCase() === 'archived' ? 'archived' : 'draft';
           
+          let finalCoverImage = book?.coverImage || book?.cover || '';
+          
+          // If cover was changed, upload it first
+          if (coverFile) {
+            console.log('📤 Uploading new cover image...');
+            const uploadResult = await uploadService.uploadImage(coverFile, `books/covers/${book.id}`);
+            if (uploadResult.success && uploadResult.url) {
+              // Use the newly uploaded URL - this replaces the old one
+              finalCoverImage = uploadResult.url;
+              console.log('✅ Image uploaded successfully. New URL:', finalCoverImage);
+              // Update preview to show the uploaded image
+              setCoverPreview(finalCoverImage);
+              // Mark that we have a new upload so preview doesn't get reset
+              setHasNewUpload(true);
+              // Clear the file reference since it's been uploaded
+              setCoverFile(null);
+            } else {
+              console.error('❌ Failed to upload image:', uploadResult.error);
+              toast.error('Failed to upload cover image: ' + uploadResult.error);
+              setIsSaving(false);
+              return;
+            }
+          } else {
+            console.log('ℹ️ No new cover file selected, keeping existing image');
+          }
+          
+          console.log('💾 Saving book with coverImage:', finalCoverImage);
           const updatedBook: any = {
             title: title.trim(),
             author: author.trim(),
@@ -1091,21 +1155,9 @@ export function BooksManagement() {
             category: category.trim(),
             language,
             status: dbStatus,
-            coverImage: coverPreview || book?.coverImage,
+            coverImage: finalCoverImage, // Always use the final cover image (new upload or existing)
             tags: Array.isArray(tags) ? tags.filter(t => t && t.trim()) : [] // Filter out empty tags
           };
-          
-          // If cover was changed, upload it
-          if (coverFile) {
-            const uploadResult = await uploadService.uploadImage(coverFile, `books/covers/${book.id}`);
-            if (uploadResult.success && uploadResult.url) {
-              updatedBook.coverImage = uploadResult.url;
-            } else {
-              toast.error('Failed to upload cover image: ' + uploadResult.error);
-              setIsSaving(false);
-              return;
-            }
-          }
           
           // Just call onSave - let the parent handle the actual save
           onSave(updatedBook);
@@ -1190,6 +1242,7 @@ export function BooksManagement() {
           {coverPreview && (
             <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-orange-200/40">
               <ImageWithFallback
+                key={coverPreview} // Force re-render when URL changes
                 src={coverPreview}
                 alt="Book cover preview"
                 className="w-full h-full object-cover"
