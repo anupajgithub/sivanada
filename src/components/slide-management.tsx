@@ -757,33 +757,13 @@ function MiddleSlidesPanel() {
 export function SlideManagement() {
   const [slides, setSlides] = useState<SlideContent[]>([]);
   const [loading, setLoading] = useState(true);
-  
-
-  // Load slides from Firebase
-  useEffect(() => {
-    const loadSlides = async () => {
-      try {
-        const result = await slideService.getSlides();
-        if (result.success && result.data) {
-          // Normalize slides to ensure bookName exists (for backward compatibility)
-          const normalizedSlides = result.data.map((slide: any) => ({
-            ...slide,
-            bookName: slide.bookName || { hindi: '', english: '' }
-          }));
-          setSlides(normalizedSlides);
-        } else {
-          console.error('Failed to load slides');
-        }
-      } catch (error) {
-        console.error('Error loading slides:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSlides();
-  }, []);
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalSlides, setTotalSlides] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -794,6 +774,66 @@ export function SlideManagement() {
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   const [isSavingSlide, setIsSavingSlide] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, categoryFilter, searchTerm, dateFrom, dateTo, sortOrder, itemsPerPage]);
+
+  // Load slides function
+  const loadSlides = async () => {
+    setLoading(true);
+    try {
+      const filters: any = {
+        page: currentPage,
+        limit: itemsPerPage,
+        sortBy: 'createdAt',
+        sortOrder: sortOrder,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+        search: searchTerm || undefined,
+      };
+
+      const result = await slideService.getSlides(filters);
+      if (result.success && result.data) {
+        // Normalize slides to ensure bookName exists (for backward compatibility)
+        const normalizedSlides = result.data.map((slide: any) => ({
+          ...slide,
+          bookName: slide.bookName || { hindi: '', english: '' }
+        }));
+        
+        // Apply date filtering client-side if dates are provided
+        let filtered = normalizedSlides;
+        if (dateFrom || dateTo) {
+          filtered = normalizedSlides.filter((slide: any) => {
+            const slideDate = new Date(slide.createdAt || slide.updatedAt);
+            if (dateFrom && slideDate < new Date(dateFrom)) return false;
+            if (dateTo) {
+              const toDate = new Date(dateTo);
+              toDate.setHours(23, 59, 59, 999); // Include the entire end date
+              if (slideDate > toDate) return false;
+            }
+            return true;
+          });
+        }
+        
+        setSlides(filtered);
+        setTotalSlides(result.total);
+        setTotalPages(Math.ceil(result.total / itemsPerPage));
+      } else {
+        console.error('Failed to load slides');
+      }
+    } catch (error) {
+      console.error('Error loading slides:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load slides from Firebase
+  useEffect(() => {
+    loadSlides();
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, dateFrom, dateTo, sortOrder]);
 
   const [newSlide, setNewSlide] = useState<Partial<SlideContent>>({
     title: { hindi: '', english: '' },
@@ -806,18 +846,7 @@ export function SlideManagement() {
     priority: 1
   });
 
-  const filteredSlides = slides.filter(slide => {
-    const matchesSearch = 
-      slide.title.hindi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      slide.title.english.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      slide.description.hindi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      slide.description.english.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || slide.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || slide.category === categoryFilter;
-    
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+  const filteredSlides = slides; // Filtering is done server-side
 
   const parseCSV = (text: string): Array<{titleHindi: string, titleEnglish: string, descriptionHindi: string, descriptionEnglish: string}> => {
     const lines = text.split('\n').filter(line => line.trim());
@@ -913,7 +942,6 @@ export function SlideManagement() {
 
           if (result.success && result.data) {
             successCount++;
-            setSlides(prev => [...prev, result.data!]);
           } else {
             failCount++;
           }
@@ -925,6 +953,8 @@ export function SlideManagement() {
 
       if (successCount > 0) {
         toast.success(`Successfully imported ${successCount} slide(s)${failCount > 0 ? `, ${failCount} failed` : ''}`);
+        // Reload slides to show imported slides
+        await loadSlides();
       } else {
         toast.error(`Failed to import ${failCount} slide(s)`);
       }
@@ -989,10 +1019,11 @@ export function SlideManagement() {
       });
       
       if (result.success && result.data) {
-        setSlides([...slides, result.data]);
         resetNewSlide();
         setIsDialogOpen(false);
         toast.success('Slide created successfully!');
+        // Reload slides to get updated list with pagination
+        await loadSlides();
       } else {
         toast.error('Failed to create slide: ' + result.error);
       }
@@ -1030,12 +1061,11 @@ export function SlideManagement() {
       });
       
       if (result.success && result.data) {
-        setSlides(slides.map(slide => 
-          slide.id === editingSlide.id ? result.data! : slide
-        ));
         setEditingSlide(null);
         setIsDialogOpen(false);
         toast.success('Slide updated successfully!');
+        // Reload slides to get updated list
+        await loadSlides();
       } else {
         toast.error('Failed to update slide: ' + result.error);
       }
@@ -1051,8 +1081,28 @@ export function SlideManagement() {
       try {
         const result = await slideService.deleteSlide(id);
         if (result.success) {
-          setSlides(slides.filter(slide => slide.id !== id));
           toast.success('Slide deleted successfully!');
+          // Reload slides - if current page becomes empty, adjust page number
+          const filters: any = {
+            page: currentPage,
+            limit: itemsPerPage,
+            sortBy: 'createdAt',
+            sortOrder: sortOrder,
+            status: statusFilter !== 'all' ? statusFilter : undefined,
+            category: categoryFilter !== 'all' ? categoryFilter : undefined,
+            search: searchTerm || undefined,
+          };
+          const reloadResult = await slideService.getSlides(filters);
+          if (reloadResult.success) {
+            // If current page is empty and not page 1, go to previous page
+            if (reloadResult.data.length === 0 && currentPage > 1) {
+              setCurrentPage(prev => prev - 1);
+            } else {
+              await loadSlides();
+            }
+          } else {
+            await loadSlides();
+          }
         } else {
           toast.error('Failed to delete slide: ' + result.error);
         }
@@ -1066,6 +1116,7 @@ export function SlideManagement() {
     try {
       const result = await slideService.toggleFeatured(id);
       if (result.success && result.data) {
+        // Update local state for immediate feedback
         setSlides(slides.map(slide => 
           slide.id === id ? result.data! : slide
         ));
@@ -1164,68 +1215,134 @@ export function SlideManagement() {
       {activeTab === 'top' ? (
       <React.Fragment>
       {/* Controls */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-        {/* Search and Filters */}
-        <div className="flex flex-1 gap-3 items-center">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Search slides..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-white border-orange-200 focus:border-orange-500"
-            />
+      <div className="flex flex-col gap-4">
+        {/* Search and Filters Row 1 */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex flex-1 gap-3 items-center flex-wrap">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search slides..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-white border-orange-200 focus:border-orange-500"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40 bg-white border-orange-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40 bg-white border-orange-200">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="spiritual">Spiritual</SelectItem>
+                <SelectItem value="educational">Educational</SelectItem>
+                <SelectItem value="promotional">Promotional</SelectItem>
+                <SelectItem value="announcement">Announcement</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+              <SelectTrigger className="w-40 bg-white border-orange-200">
+                <SelectValue placeholder="Sort Order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">Newest First</SelectItem>
+                <SelectItem value="asc">Oldest First</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-white border-orange-200">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-40 bg-white border-orange-200">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="spiritual">Spiritual</SelectItem>
-              <SelectItem value="educational">Educational</SelectItem>
-              <SelectItem value="promotional">Promotional</SelectItem>
-              <SelectItem value="announcement">Announcement</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* Add Slide and CSV Upload Buttons */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => csvFileInputRef.current?.click()}
-            className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50"
-            disabled={isUploadingCSV}
-          >
-            <Upload className="h-4 w-4" />
-            {isUploadingCSV ? 'Uploading...' : 'Upload CSV/Excel'}
-          </Button>
-          <input
-            ref={csvFileInputRef}
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleCSVUpload}
-            className="hidden"
-          />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Slide
-              </Button>
-            </DialogTrigger>
+        {/* Date Filters Row 2 */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="date-from" className="text-sm font-semibold text-gray-700 whitespace-nowrap">From Date:</Label>
+            <Input
+              id="date-from"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-40 bg-white border-orange-200 focus:border-orange-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="date-to" className="text-sm font-semibold text-gray-700 whitespace-nowrap">To Date:</Label>
+            <Input
+              id="date-to"
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-40 bg-white border-orange-200 focus:border-orange-500"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+              }}
+              className="border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              Clear Dates
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Label htmlFor="items-per-page" className="text-sm font-semibold text-gray-700 whitespace-nowrap">Items per page:</Label>
+            <Select value={itemsPerPage.toString()} onValueChange={(v) => {
+              setItemsPerPage(parseInt(v));
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-24 bg-white border-orange-200">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Slide and CSV Upload Buttons */}
+      <div className="flex items-center gap-2 justify-end">
+        <Button
+          variant="outline"
+          onClick={() => csvFileInputRef.current?.click()}
+          className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50"
+          disabled={isUploadingCSV}
+        >
+          <Upload className="h-4 w-4" />
+          {isUploadingCSV ? 'Uploading...' : 'Upload CSV/Excel'}
+        </Button>
+        <input
+          ref={csvFileInputRef}
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={handleCSVUpload}
+          className="hidden"
+        />
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Slide
+            </Button>
+          </DialogTrigger>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingSlide ? 'Edit Slide' : 'Create New Slide'}</DialogTitle>
@@ -1555,7 +1672,6 @@ export function SlideManagement() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
 
       {/* Slides Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1654,15 +1770,80 @@ export function SlideManagement() {
         ))}
       </div>
 
-      {filteredSlides.length === 0 && (
+      {loading && (
+        <div className="text-center py-12">
+          <div className="text-gray-500">Loading slides...</div>
+        </div>
+      )}
+
+      {!loading && filteredSlides.length === 0 && (
         <div className="text-center py-12">
           <Presentation className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No slides found</h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all' 
+            {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all' || dateFrom || dateTo
               ? 'Try adjusting your search or filters' 
               : 'Create your first slide to get started'}
           </p>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-orange-200 pt-4">
+          <div className="text-sm text-gray-600">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalSlides)} of {totalSlides} slides
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || loading}
+              className="border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    disabled={loading}
+                    className={
+                      currentPage === pageNum
+                        ? "bg-orange-500 text-white hover:bg-orange-600"
+                        : "border-orange-200 text-orange-600 hover:bg-orange-50"
+                    }
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || loading}
+              className="border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
       </React.Fragment>

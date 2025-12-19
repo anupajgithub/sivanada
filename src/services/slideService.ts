@@ -30,8 +30,10 @@ class SlideService {
         search,
         status,
         category,
-        sortBy = 'priority',
-        sortOrder = 'asc'
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        dateFrom,
+        dateTo
       } = filters;
 
       let q = query(collection(db, this.collectionName));
@@ -45,16 +47,40 @@ class SlideService {
         q = query(q, where('category', '==', category));
       }
 
+      // Apply date filters
+      if (dateFrom) {
+        q = query(q, where('createdAt', '>=', dateFrom));
+      }
+      if (dateTo) {
+        // Add one day to include the entire end date
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        q = query(q, where('createdAt', '<=', endDate.toISOString()));
+      }
+
       // Apply sorting
       q = query(q, orderBy(sortBy, sortOrder));
 
       // Apply pagination
       if (page > 1) {
-        const previousPageQuery = query(
-          collection(db, this.collectionName),
-          orderBy(sortBy, sortOrder),
-          fbLimit((page - 1) * limit)
-        );
+        // Build previous page query with same filters
+        let previousPageQuery = query(collection(db, this.collectionName));
+        if (status && status !== 'all') {
+          previousPageQuery = query(previousPageQuery, where('status', '==', status));
+        }
+        if (category && category !== 'all') {
+          previousPageQuery = query(previousPageQuery, where('category', '==', category));
+        }
+        if (dateFrom) {
+          previousPageQuery = query(previousPageQuery, where('createdAt', '>=', dateFrom));
+        }
+        if (dateTo) {
+          const endDate = new Date(dateTo);
+          endDate.setHours(23, 59, 59, 999);
+          previousPageQuery = query(previousPageQuery, where('createdAt', '<=', endDate.toISOString()));
+        }
+        previousPageQuery = query(previousPageQuery, orderBy(sortBy, sortOrder), fbLimit((page - 1) * limit));
+        
         const previousDocs = await getDocs(previousPageQuery);
         const lastDoc = previousDocs.docs[previousDocs.docs.length - 1];
         if (lastDoc) {
@@ -81,8 +107,22 @@ class SlideService {
         );
       }
 
-      // Get total count for pagination
-      const totalQuery = query(collection(db, this.collectionName));
+      // Get total count for pagination (with same filters)
+      let totalQuery = query(collection(db, this.collectionName));
+      if (status && status !== 'all') {
+        totalQuery = query(totalQuery, where('status', '==', status));
+      }
+      if (category && category !== 'all') {
+        totalQuery = query(totalQuery, where('category', '==', category));
+      }
+      if (dateFrom) {
+        totalQuery = query(totalQuery, where('createdAt', '>=', dateFrom));
+      }
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        totalQuery = query(totalQuery, where('createdAt', '<=', endDate.toISOString()));
+      }
       const totalSnapshot = await getDocs(totalQuery);
       const total = totalSnapshot.size;
 

@@ -198,6 +198,8 @@ export interface QueryFilters {
   category?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  dateFrom?: string; // ISO date string
+  dateTo?: string; // ISO date string
 }
 
 export interface DateRange {

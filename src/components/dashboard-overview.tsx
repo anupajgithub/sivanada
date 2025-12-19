@@ -87,7 +87,7 @@ export function DashboardOverview() {
           audioService.getAudioContent(),
           wallpaperService.getWallpapers(),
           calendarService.getEvents(),
-          slideService.getSlides()
+          slideService.getSlides({ limit: 1000 })
         ]);
 
         const hindiBooks = booksResult.success ? booksResult.data.filter((book: any) => book.language === 'hindi').length : 0;
